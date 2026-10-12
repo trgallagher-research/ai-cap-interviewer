@@ -417,5 +417,5 @@
     return out;
   }
 
-  window.Engine = { llm, Interview, LIMITS, safeVisible, parseTurn, parseRate, parsePhase, tryParseJson, band, divergence, divergenceFor, meanRating, assembleProfile, stats, helpMap, newId, EXPECTED, TOL };
+  window.Engine = { llm, Interview, LIMITS, WANT_KEYWORDS, safeVisible, parseTurn, parseRate, parsePhase, tryParseJson, band, divergence, divergenceFor, meanRating, assembleProfile, stats, helpMap, newId, EXPECTED, TOL };
 })();
