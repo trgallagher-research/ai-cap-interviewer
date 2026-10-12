@@ -17,6 +17,7 @@
     "aligned": "In step",
     "confident-starter": "More confident than practice",
     "cautious-practitioner": "Less confident than practice",
+    "unrated": "No ratings given",
   };
   const KIND_SHORT = { "aligned": "in step", "confident-starter": "above", "cautious-practitioner": "below" };
   const STANCE_LABEL = { enthusiast: "enthusiast", pragmatic: "pragmatic", cautious: "cautious", sceptical: "sceptical", worried: "worried" };
@@ -74,7 +75,7 @@
   function levelOf(p) { return Math.min(4, Math.max(0, Math.round(Number(p.practice && p.practice.level) || 0))); }
   function levelLabel(l) { const L = P().LADDER[l]; return L ? L.label : String(l); }
   function meanOf(p) { const m = p.confidence && p.confidence.mean; return Number.isFinite(m) ? m : null; }
-  function kindOf(p) { return (p.divergence && p.divergence.kind) || "aligned"; }
+  function kindOf(p) { const k = (p.divergence && p.divergence.kind) || "aligned"; return (meanOf(p) === null) ? "unrated" : k; }
   function isSample(p) { return p.source === "seed"; }
 
   // ---------------------------------------------------------------------------
@@ -338,7 +339,7 @@
   }
   function kindPill(kind) {
     const cls = kind === "confident-starter" ? "warn" : kind === "cautious-practitioner" ? "accent" : "";
-    return el("span", { class: "pill " + cls }, KIND_LABEL[kind] || kind);
+    return el("span", { class: "pill " + cls, style: kind === "unrated" ? { color: "var(--muted)" } : null }, KIND_LABEL[kind] || kind);
   }
   function sampleTag() { return el("span", { class: "og-sample-tag", title: "A fictional sample member" }, "sample"); }
 
@@ -382,6 +383,7 @@
     const scepticOrWorried = (stats.byStance.sceptical || 0) + (stats.byStance.worried || 0);
     const above = stats.byDivergence["confident-starter"] || 0;
     const below = stats.byDivergence["cautious-practitioner"] || 0;
+    const unrated = stats.byDivergence["unrated"] || 0;
     const sampleN = profiles.filter(isSample).length;
     const stat = (label, value, hint, suffix) => el("div", { class: "og-stat" }, [
       el("div", { class: "label" }, label),
@@ -392,7 +394,7 @@
       stat("Members interviewed", n, sampleN ? `${sampleN} of these are fictional samples` : "Real interviews so far"),
       stat("Average confidence", stats.meanConfidence === null ? "n/a" : stats.meanConfidence, "Members rated 0 to 100 how sure they are they can do tasks from their own work", stats.meanConfidence === null ? "" : "/ 100"),
       stat("Sceptical or worried", scepticOrWorried, "Members whose overall stance on AI is doubtful or uneasy"),
-      stat("Confidence out of step", above + below, `${above} rate themselves above what they described doing, ${below} below`),
+      stat("Confidence out of step", above + below, `${above} rate themselves above what they described doing, ${below} below` + (unrated ? `; ${unrated} gave no ratings` : "")),
     ]);
     const spread = drawSpreadBar(stats);
     spread.appendChild(levelsExplainer());
@@ -431,8 +433,9 @@
     ]));
     const caption = el("p", { class: "og-caption" },
       "Each mark is one member. Left to right is how far AI use has gone in their work, from what they described; " +
-      "up and down is how confident they said they are. The shaded band is the confidence we would expect at each level. " +
+      "up and down is how confident they said they are. The shaded band is the typical confidence for someone at that level, as a rough guide. " +
       "Members above the band rate themselves more confident than what they described doing; below it, less. " +
+      "The shape and colour of each mark come from that member's own rated tasks, which is more precise than the band, so a mark can sit just outside the band and still count as in step. " +
       "Hover or tab to a mark to see who it is; click it to open their details." +
       (noMean ? ` ${plural(noMean, "member")} gave no ratings and ${noMean === 1 ? "is" : "are"} not shown here.` : ""));
     return sectionEl("scatter", "Practice and confidence", "Where what people do and how sure they feel line up, and where they do not.", el("div", null, [wrap, caption]));
@@ -830,6 +833,17 @@
     }
     if (p.confidence.pattern) out.push(el("p", { style: { marginTop: ".5rem" } }, p.confidence.pattern));
     if (p.divergence && p.divergence.note) out.push(el("p", { class: "og-caption" }, p.divergence.note));
+    const Eng = E();
+    if (items.length && typeof Eng.divergenceFor === "function") {
+      try {
+        const d = Eng.divergenceFor(levelOf(p), items);
+        if (d && Number.isFinite(d.residual)) {
+          const r = d.residual;
+          const words = r === 0 ? "rated exactly what their tasks would predict" : `rated ${Math.abs(r)} ${Math.abs(r) === 1 ? "point" : "points"} ${r > 0 ? "above" : "below"} what their tasks would predict`;
+          out.push(el("p", { class: "og-caption", "data-residual": String(r) }, `${p.member.name} ${words} (expected about ${d.expected}, given how far each rated task sits beyond their practice level).`));
+        }
+      } catch (_) { /* older engine */ }
+    }
     return out;
   }
 

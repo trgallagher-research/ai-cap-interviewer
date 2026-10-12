@@ -22,7 +22,7 @@ Dark:  bg #121716, surface #1B2321, surface-2 #232D2B, fg #EAF0EE, fg-2 #B6C2BF,
 
 Chart palettes (organiser view; validated with the dataviz skill's validator before shipping):
   Practice ladder (sequential, 5 steps, one teal hue light→dark): light mode
-    L0 #CFE7E7, L1 #9CCFD0, L2 #5FAEB0, L3 #2A8588, L4 #0F5558   (dark mode: #1F4A4B #2B6D6F #3F9496 #6CBFC1 #A9E0E1)
+    L0 #7DBCBD, L1 #56A4A6, L2 #378A8D, L3 #1C6A6D, L4 #0E4A4D   (dark mode: #2A5E5F #3A7F81 #4FA3A5 #7CC8CA #B4E4E5)  [validated]
   Stance (categorical, fixed order enthusiast, pragmatic, cautious, sceptical, worried):
     #0F6E72 #5B7FB5 #B5731C #8A5BA0 #B23A3A    (dark: #5FC2C4 #93AEDD #E0A24A #C49BD6 #E07070)
   Divergence kinds: aligned = --muted outline, confident-starter = --warm, cautious-practitioner = --accent

@@ -56,7 +56,7 @@ const SEED = [
     summary: "Regular use for session preparation and admin.", domains: [{ key: "prep", evidence: "Prepares session outlines every time." }, { key: "admin", evidence: "Invoices and planning." }],
     tools: ["ChatGPT"], items: [{ id: "r1", task: "Prepare a session outline", level: 2, rating: 70 }, { id: "r2", task: "Analyse a set of interview notes", level: 3, rating: 40 }],
     wants: ["prepare a workshop faster with AI"], offers: [], pay: "", quotes: ["It saves me an evening a week."], endedEarly: true }),
-  profile({ id: "p_g", name: "Gijs", role: "adviser", level: 2, mean: null, kind: "aligned", stance: "worried",
+  profile({ id: "p_g", name: "Gijs", role: "adviser", level: 2, mean: null, kind: "unrated", stance: "worried",
     summary: "Uses it routinely for writing but worries about data.", domains: [{ key: "writing", evidence: "Emails and reports." }],
     tools: ["Copilot"], items: [], wants: ["keep meeting notes with AI without leaking data"], offers: [], pay: "", quotes: ["Where does the text go?"] }),
 ];
@@ -170,6 +170,8 @@ function check(name, ok, extra) { if (ok) { passes++; console.log("  ok   " + na
   check("members list has N cards", (await page.$$("#og-members .og-member")).length === N);
   check("sample markers shown", (await page.$$("#og-members .og-sample-tag")).length === N);
   check("endedEarly marked", (await page.textContent("#og-members")).includes("stopped early"));
+  check("unrated member gets a 'No ratings given' pill", await page.$eval("#og-members .og-member[data-id='p_g']", (n) => n.textContent.includes("No ratings given")));
+  check("summary counts unrated", (await page.textContent("#og-summary")).includes("1 gave no ratings"));
 
   // hover tooltip on a dot
   await page.hover("#og-scatter .dot[data-id='p_b']");
@@ -181,6 +183,7 @@ function check(name, ok, extra) { if (ok) { passes++; console.log("  ok   " + na
   check("detail panel opens with member name", drawerText.includes("Anneke"));
   check("detail shows confidence bars", (await page.$$("#og-drawer .og-bar")).length === 3);
   check("detail shows transcript collapsed", (await page.$("#og-drawer details")) !== null);
+  check("detail shows residual in words", /rated \d+ points? (above|below) what their tasks would predict|rated exactly/.test(drawerText));
   await page.screenshot({ path: path.join(SHOTS, "desktop-light-detail.png") });
   await page.keyboard.press("Escape");
   check("Escape closes panel", (await page.$("#og-drawer")) === null);
