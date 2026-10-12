@@ -1,4 +1,4 @@
-/* member.js — the member's screens: landing → interview → ratings → feedback.
+/* member.js — the member's screens: landing → quick questions → interview → ratings → feedback.
  *
  * Depends on window.App (ui helpers), window.Engine, window.Prompts, window.Store.
  * Exposes window.MemberView = { render(container), reset() }.
@@ -14,12 +14,17 @@
     close: "wrapping up",
   };
   const PHASE_ORDER = ["orient", "practice", "stretch", "rate", "close"];
+  // Progress steps shown to the member: the questionnaire first, then the interview phases.
+  const STEP_ORDER = ["quick"].concat(PHASE_ORDER);
+  const STEP_HINT = Object.assign({ quick: "quick questions" }, PHASE_HINT);
 
   // Module state (one interview per page load; "Start another interview" resets it)
   const S = {
     container: null,
     interview: null,
-    screen: "landing",      // landing | interview | preparing | feedback
+    screen: "landing",      // landing | questionnaire | interview | preparing | feedback
+    member: null,           // {name, role} before the interview exists
+    answers: null,          // questionnaire answers being filled in (restored from draft)
     busy: false,
     rateCardEl: null,       // the live rating card, so it is never rendered twice
     rateSubmitted: false,
@@ -39,13 +44,14 @@
     S.container = container;
     container.replaceChildren();
     if (S.screen === "landing") renderLanding();
+    else if (S.screen === "questionnaire") renderQuestionnaire();
     else if (S.screen === "interview") renderInterviewScreen();
     else if (S.screen === "preparing") renderPreparing();
     else if (S.screen === "feedback") renderFeedback();
   }
 
   function reset() {
-    S.interview = null; S.screen = "landing"; S.busy = false; S.rateCardEl = null; S.rateSubmitted = false;
+    S.interview = null; S.member = null; S.answers = null; S.screen = "landing"; S.busy = false; S.rateCardEl = null; S.rateSubmitted = false;
     S.profile = null; S.saveWhere = []; S.lastTurnOpts = null; S.profileError = null;
     window.Store.clearDraft();
     if (S.container) render(S.container);
@@ -64,8 +70,8 @@
       h("h1", {}, "How does AI show up in your work?"),
     ]));
     wrap.appendChild(h("p", { class: "lead" },
-      "This is a relaxed conversation in English, about 10 to 15 minutes, led by an AI interviewer. " +
-      "It asks how AI tools do or do not show up in your work: what you actually do, what you have learned, and where your edges are. " +
+      "This takes about 8 to 10 minutes: a minute of quick questions, then a short conversation in English with an AI interviewer. " +
+      "It is about how AI tools do or do not show up in your work: what you actually do, what you have learned, and where your edges are. " +
       "There are no right answers. People who never use AI are as interesting to us as daily users."));
     wrap.appendChild(h("p", { class: "lead" },
       "Near the end you rate your confidence on a few tasks drawn from your own practice. " +
@@ -74,9 +80,10 @@
     if (draft && draft.interview) {
       const d = draft.interview;
       const n = (d.turns || []).filter((t) => t.role === "member").length;
+      const where = d.stage === "questionnaire" ? "the quick questions are not finished yet." : `${n} answer${n === 1 ? "" : "s"} in the conversation so far.`;
       wrap.appendChild(h("div", { class: "card stack-sm", id: "draft-card" }, [
         h("p", { class: "eyebrow" }, "Unfinished interview"),
-        h("p", {}, `${d.member.name || "You"} (${d.member.role || "no role given"}): ${n} answer${n === 1 ? "" : "s"} so far.`),
+        h("p", {}, `${d.member.name || "You"} (${d.member.role || "no role given"}): ${where}`),
         h("div", { class: "row" }, [
           h("button", { class: "btn primary", id: "btn-continue", on: { click: () => resumeDraft(draft) } }, "Continue your interview"),
           h("button", { class: "btn", id: "btn-startover", on: { click: () => { window.Store.clearDraft(); render(c); } } }, "Start again"),
@@ -93,14 +100,14 @@
       if (!nm) { err.textContent = "Please give a first name."; err.hidden = false; name.focus(); return; }
       if (!rl) { err.textContent = "Please describe your role in one line."; err.hidden = false; role.focus(); return; }
       err.hidden = true;
-      startInterview({ name: nm, role: rl });
+      startQuestionnaire({ name: nm, role: rl });
     } } }, [
       h("label", { class: "field", htmlFor: "f-name" }, ["First name", name]),
       h("label", { class: "field", htmlFor: "f-role" }, ["Your role in one line", role]),
       err,
       h("p", { class: "small" }, "Your answers are saved for the organiser, either in the shared store or as a result code you send her yourself. Use a first name only and leave out client names. This is a prototype: treat it as a test, not a formal survey."),
       h("div", { class: "row" }, [
-        h("button", { class: "btn primary", type: "submit", id: "btn-start" }, draft ? "Start a new interview" : "Start the interview"),
+        h("button", { class: "btn primary", type: "submit", id: "btn-start" }, draft ? "Start a new interview" : "Start"),
       ]),
     ]);
     wrap.appendChild(form);
@@ -115,12 +122,24 @@
     if (n) { n.textContent = msg; n.hidden = false; } else ui().toast(msg);
   }
 
-  async function startInterview(member) {
+  async function startQuestionnaire(member) {
     const btn = document.getElementById("btn-start");
     if (btn) btn.disabled = true;
     await window.Engine.llm.init();
     if (!window.Engine.llm.available) { showUnavailable(); if (btn) btn.disabled = false; return; }
-    S.interview = new window.Engine.Interview(member);
+    S.interview = null; S.member = member; S.answers = {};
+    S.rateCardEl = null; S.rateSubmitted = false; S.profile = null; S.profileError = null;
+    S.screen = "questionnaire";
+    saveQuestionnaireDraft();
+    render(S.container);
+  }
+
+  function saveQuestionnaireDraft() {
+    window.Store.saveDraft({ stage: "questionnaire", member: S.member, answers: S.answers || {}, turns: [] });
+  }
+
+  function startInterview(answers) {
+    S.interview = new window.Engine.Interview(S.member, answers);
     S.rateCardEl = null; S.rateSubmitted = false; S.profile = null; S.profileError = null;
     S.screen = "interview";
     window.Store.saveDraft(S.interview.toJSON());
@@ -131,9 +150,17 @@
   async function resumeDraft(draft) {
     await window.Engine.llm.init();
     if (!window.Engine.llm.available) { showUnavailable(); return; }
-    const iv = window.Engine.Interview.fromJSON(draft.interview);
-    S.interview = iv;
-    S.rateCardEl = null; S.rateSubmitted = !!iv.ratings; S.profile = null; S.profileError = null;
+    const d = draft.interview;
+    S.rateCardEl = null; S.profile = null; S.profileError = null;
+    if (d.stage === "questionnaire") {
+      S.interview = null; S.member = d.member; S.answers = d.answers || {};
+      S.screen = "questionnaire";
+      render(S.container);
+      return;
+    }
+    const iv = window.Engine.Interview.fromJSON(d);
+    S.interview = iv; S.member = iv.member; S.answers = iv.answers;
+    S.rateSubmitted = !!iv.ratings;
     if (iv.status === "complete" || iv.status === "ended_early") {
       S.screen = "preparing"; render(S.container); generateProfile(); return;
     }
@@ -145,7 +172,143 @@
     } else if (!last || last.role === "member") {
       // A turn was in flight when the page was left: run it again.
       runTurn({});
+    } else if (iv.chips && iv.chips.length) {
+      showChips(iv.chips);
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Questionnaire (rendered entirely from Prompts.QUESTIONNAIRE)
+  // ---------------------------------------------------------------------------
+  function renderQuestionnaire() {
+    const P = window.Prompts;
+    const c = S.container;
+    const prev = S.answers || {};
+    const wrap = h("div", { class: "stack", id: "questionnaire" });
+    wrap.appendChild(h("div", { class: "progress" }, [
+      h("span", {}, phaseHintNode("quick")),
+      h("span", {}, `${S.member.name}, ${S.member.role}`),
+    ]));
+    wrap.appendChild(h("p", { class: "lead" }, "A few quick questions first, about a minute. Then a short conversation about one or two real examples."));
+
+    const form = h("form", { class: "stack q-form", id: "q-form", novalidate: true });
+    const sets = {};
+    for (const qid of P.QUESTION_ORDER) {
+      const q = P.QUESTIONNAIRE[qid];
+      if (!q) continue;
+      const multi = q.type === "multi";
+      const prevVal = prev[qid];
+      const opts = q.options.map((o) => {
+        const id = `q-${qid}-${o.key}`.replace(/[^A-Za-z0-9_-]/g, "_");
+        const checked = multi ? (Array.isArray(prevVal) && prevVal.includes(o.key)) : prevVal === o.key;
+        const input = h("input", { type: multi ? "checkbox" : "radio", name: "q-" + qid, value: o.key, id, checked, dataset: o.exclusive ? { exclusive: "1" } : {} });
+        return h("label", { class: "opt" + (o.exclusive ? " opt-exclusive" : ""), htmlFor: id }, [
+          input,
+          h("span", { class: "opt-text" }, [
+            h("span", { class: "opt-label" }, o.label),
+            o.hint ? h("span", { class: "opt-hint" }, o.hint) : null,
+          ]),
+        ]);
+      });
+      const kids = [
+        h("legend", {}, [q.label, q.required ? h("span", { class: "q-req" }, " (required)") : null]),
+        h("div", { class: "q-options" + (multi ? " multi" : "") }, opts),
+      ];
+      if (q.other) {
+        const oid = "q-" + qid + "-other";
+        kids.push(h("label", { class: "field q-other", htmlFor: oid }, [
+          h("span", { class: "small" }, "Other"),
+          h("input", { class: "input", type: "text", id: oid, maxLength: 120, value: prev[qid + "Other"] || "" }),
+        ]));
+      }
+      kids.push(h("p", { class: "q-error", id: "q-err-" + qid, role: "alert", hidden: true }, "Please choose one."));
+      const fs = h("fieldset", { class: "q", id: "q-" + qid, dataset: { qid } }, kids);
+      sets[qid] = fs;
+      form.appendChild(fs);
+    }
+
+    const submit = h("button", { class: "btn primary", type: "submit", id: "btn-q-continue" }, "Continue to the conversation");
+    form.appendChild(h("div", { class: "row" }, [submit]));
+
+    // Exclusive options untick the others and vice versa.
+    form.addEventListener("change", (e) => {
+      const t = e.target;
+      if (t && t.type === "checkbox" && t.checked) {
+        const group = form.querySelectorAll(`input[name="${t.name}"]`);
+        group.forEach((x) => {
+          if (x === t) return;
+          if (t.dataset.exclusive || x.dataset.exclusive) x.checked = false;
+        });
+      }
+      sync();
+      const fs = t && t.closest && t.closest("fieldset");
+      if (fs) clearQError(fs.dataset.qid);
+    });
+    form.addEventListener("input", (e) => { if (e.target && e.target.type === "text") sync(); });
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const a = sync();
+      let firstBad = null;
+      for (const qid of P.QUESTION_ORDER) {
+        const q = P.QUESTIONNAIRE[qid];
+        if (!q || !q.required || P.questionSkipped(qid, a)) continue;
+        const v = a[qid];
+        const ok = Array.isArray(v) ? v.length > 0 : !!v;
+        if (!ok) {
+          const err = document.getElementById("q-err-" + qid);
+          if (err) err.hidden = false;
+          sets[qid].classList.add("invalid");
+          if (!firstBad) firstBad = sets[qid];
+        }
+      }
+      if (firstBad) {
+        const inp = firstBad.querySelector("input");
+        if (inp) { try { inp.focus({ preventScroll: true }); } catch (_) { inp.focus(); } }
+        firstBad.scrollIntoView && firstBad.scrollIntoView({ block: "center" });
+        return;
+      }
+      startInterview(a);
+    });
+
+    function clearQError(qid) {
+      const err = document.getElementById("q-err-" + qid);
+      if (err) err.hidden = true;
+      if (sets[qid]) sets[qid].classList.remove("invalid");
+    }
+
+    /** Read the form, hide skipped questions, store answers (skipped ones dropped). */
+    function sync() {
+      const raw = {};
+      for (const qid of P.QUESTION_ORDER) {
+        const q = P.QUESTIONNAIRE[qid];
+        if (!q) continue;
+        const checked = Array.from(form.querySelectorAll(`input[name="q-${qid}"]:checked`)).map((x) => x.value);
+        raw[qid] = q.type === "multi" ? checked : (checked[0] || "");
+        if (q.other) {
+          const o = document.getElementById("q-" + qid + "-other");
+          const v = o ? o.value.trim() : "";
+          if (v) raw[qid + "Other"] = v;
+        }
+      }
+      const a = {};
+      for (const qid of P.QUESTION_ORDER) {
+        const q = P.QUESTIONNAIRE[qid];
+        if (!q) continue;
+        const skip = P.questionSkipped(qid, raw);
+        sets[qid].hidden = skip;
+        if (skip) continue;
+        if (q.type === "multi") a[qid] = raw[qid];
+        else if (raw[qid]) a[qid] = raw[qid];
+        if (q.other && raw[qid + "Other"]) a[qid + "Other"] = raw[qid + "Other"];
+      }
+      S.answers = a;
+      saveQuestionnaireDraft();
+      return a;
+    }
+
+    wrap.appendChild(form);
+    c.appendChild(wrap);
+    sync();
   }
 
   // ---------------------------------------------------------------------------
@@ -165,6 +328,7 @@
     for (const t of iv.turns) chat.appendChild(bubble(t.role, t.text, isRatingsTurn(t)));
     wrap.appendChild(chat);
 
+    wrap.appendChild(h("div", { class: "chips", id: "chips", hidden: true, role: "group", "aria-label": "Quick replies" }));
     const errBox = h("div", { id: "turn-error", hidden: true });
     wrap.appendChild(errBox);
 
@@ -186,10 +350,10 @@
     if (iv.status === "rating") setComposerHidden(true);
   }
 
-  function phaseHintNode(phase) {
-    const idx = Math.max(0, PHASE_ORDER.indexOf(phase));
-    const dots = h("span", { class: "phase-dots", "aria-hidden": "true" }, PHASE_ORDER.map((p, i) => h("i", { class: i <= idx ? "on" : "" })));
-    return h("span", {}, [dots, PHASE_HINT[phase] || PHASE_HINT.orient]);
+  function phaseHintNode(step) {
+    const idx = Math.max(0, STEP_ORDER.indexOf(step));
+    const dots = h("span", { class: "phase-dots", "aria-hidden": "true" }, STEP_ORDER.map((p, i) => h("i", { class: i <= idx ? "on" : "" })));
+    return h("span", {}, [dots, h("span", { class: "visually-hidden" }, `Step ${idx + 1} of ${STEP_ORDER.length}: `), STEP_HINT[step] || STEP_HINT.orient]);
   }
   function updatePhase() {
     const n = document.getElementById("phase-hint");
@@ -224,7 +388,21 @@
     const comp = document.getElementById("composer");
     if (comp) comp.hidden = hidden;
   }
+  function showChips(chips) {
+    const box = document.getElementById("chips");
+    if (!box || S.rateCardEl || !S.interview || S.interview.status !== "in_progress") return;
+    box.replaceChildren(...chips.map((t) => h("button", { class: "chip", type: "button", on: { click: () => sendText(t) } }, t)));
+    box.hidden = false;
+    scrollChat();
+  }
+  function clearChips() {
+    const box = document.getElementById("chips");
+    if (box) { box.hidden = true; box.replaceChildren(); }
+    if (S.interview) S.interview.chips = null;
+  }
+
   function showTurnError(message, retryLabel, retryFn) {
+    clearChips();
     const box = document.getElementById("turn-error");
     if (!box) return;
     box.replaceChildren(h("div", { class: "notice bad stack-sm", id: "turn-error-box" }, [
@@ -244,18 +422,24 @@
   }
 
   function send() {
-    if (S.busy) return;
     const ta = document.getElementById("answer");
-    const text = (ta.value || "").trim();
-    if (!text) return;
+    if (sendText(ta.value || "")) ta.value = "";
+  }
+
+  /** The one path for a member answer: typed or tapped chip. */
+  function sendText(raw) {
+    if (S.busy) return false;
+    const text = String(raw || "").trim();
+    if (!text) return false;
+    clearChips();
     S.interview.answer(text);
-    ta.value = "";
     const stale = document.getElementById("turn-error");
     if (stale) { stale.hidden = true; stale.replaceChildren(); }
     chatEl().appendChild(bubble("member", text));
     scrollChat();
     window.Store.saveDraft(S.interview.toJSON());
     runTurn({});
+    return true;
   }
 
   /** One interviewer turn. Safe to re-run with the same opts: Engine only records the turn on success. */
@@ -285,8 +469,9 @@
     updatePhase();
     setBusy(false);
     scrollChat();
-    if (res.complete) { onComplete(); return; }
-    if (res.rateItems && !S.rateSubmitted) { showRateCard(res.rateItems); return; }
+    if (res.complete) { clearChips(); onComplete(); return; }
+    if (res.rateItems && !S.rateSubmitted) { clearChips(); showRateCard(res.rateItems); return; }
+    if (res.chips && res.chips.length) showChips(res.chips);
   }
 
   function askStop(wrap, link) {
@@ -297,6 +482,7 @@
         wrap.replaceChildren(link);
         const card = S.rateCardEl;
         if (card && !S.rateSubmitted) { card.remove(); S.rateCardEl = null; }
+        clearChips();
         setComposerHidden(false);
         runTurn({ endNow: true });
       } } }, "Yes, stop here"),
@@ -309,6 +495,7 @@
   // ---------------------------------------------------------------------------
   function showRateCard(items) {
     if (S.rateCardEl || S.rateSubmitted) return; // never twice
+    clearChips();
     const ch = chatEl();
     if (!ch) return;
     // Easiest first, stable.
@@ -363,6 +550,7 @@
   // Completion → profile
   // ---------------------------------------------------------------------------
   function onComplete() {
+    clearChips();
     S.screen = "preparing";
     render(S.container);
     generateProfile();
@@ -380,8 +568,7 @@
     const iv = S.interview;
     S.profileError = null;
     try {
-      const prompt = window.Prompts.buildProfilePrompt(iv.member, iv.turns, iv.rateItems, iv.ratings);
-      const out = await window.Engine.llm.json([{ role: "user", content: prompt }], { tier: "complex" });
+      const out = await window.Engine.llm.json(window.Engine.profileMessages(iv), { tier: "complex" });
       const profile = window.Engine.assembleProfile(iv, out, "live");
       S.profile = profile;
       let where = [];
@@ -460,7 +647,7 @@
   function renderProfileError(c) {
     const iv = S.interview;
     const e = S.profileError;
-    const raw = JSON.stringify({ kind: "aiwd-transcript", member: iv.member, turns: iv.turns, rateItems: iv.rateItems, ratings: iv.ratings, status: iv.status });
+    const raw = JSON.stringify({ kind: "aiwd-transcript", member: iv.member, answers: iv.answers, turns: iv.turns, rateItems: iv.rateItems, ratings: iv.ratings, status: iv.status });
     const ta = h("textarea", { class: "textarea code", id: "transcript-code", readOnly: true, rows: 4, value: raw, "aria-label": "Transcript code" });
     const btn = h("button", { class: "btn", type: "button", id: "btn-copy-transcript" }, "Copy the transcript");
     btn.addEventListener("click", () => ui().copy(raw, btn));

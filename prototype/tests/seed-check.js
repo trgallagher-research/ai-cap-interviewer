@@ -35,11 +35,42 @@ for (const p of SEED) {
   if (p.feedback.strengths.length < 1 || p.feedback.strengths.length > 2 || p.feedback.nextSteps.length < 1 || p.feedback.nextSteps.length > 2) errs.push(`${n}: feedback counts`);
   if (p.quotes.length < 2 || p.quotes.length > 4) errs.push(`${n}: quotes count`);
   const t = Date.parse(p.createdAt); if (!(t >= Date.parse("2026-09-01") && t <= Date.parse("2026-10-12T23:59:59Z"))) errs.push(`${n}: createdAt`);
+  // Questionnaire (hybrid flow): defined keys only, skipped questions absent, derived fields exact.
+  const a = p.questionnaire;
+  if (!a) errs.push(`${n}: questionnaire missing`); else {
+    const allowed = new Set(P.QUESTION_ORDER.concat(["toolsOther", "offerOther"]));
+    for (const k of Object.keys(a)) if (!allowed.has(k)) errs.push(`${n}: unknown answer field ${k}`);
+    for (const qid of P.QUESTION_ORDER) {
+      const q = P.QUESTIONNAIRE[qid], v = a[qid], skipped = P.questionSkipped(qid, a);
+      if (skipped && v !== undefined) errs.push(`${n}: ${qid} answered but should be skipped`);
+      if (!skipped && q.required && !v) errs.push(`${n}: required ${qid} missing`);
+      if (v === undefined) continue;
+      const okKeys = new Set(q.options.map((o) => o.key));
+      const vals = Array.isArray(v) ? v : [v];
+      if ((q.type === "multi") !== Array.isArray(v)) errs.push(`${n}: ${qid} wrong type`);
+      for (const x of vals) if (!okKeys.has(x)) errs.push(`${n}: ${qid} has undefined key ${x}`);
+      const excl = q.options.filter((o) => o.exclusive).map((o) => o.key);
+      if (Array.isArray(v) && v.length > 1 && v.some((x) => excl.includes(x))) errs.push(`${n}: ${qid} exclusive option combined`);
+    }
+    if (a.stance !== p.practice.stance) errs.push(`${n}: stance ${p.practice.stance} != questionnaire ${a.stance}`);
+    if (lvl === 0 && !["never", "tried"].includes(a.frequency)) errs.push(`${n}: level 0 with frequency ${a.frequency}`);
+    const sr = { frequency: a.frequency || "",
+      domains: (a.frequency === "never" || !Array.isArray(a.uses)) ? [] : a.uses.filter((k) => keys.has(k)),
+      tools: (a.frequency === "never" || !Array.isArray(a.tools)) ? [] : a.tools.slice().concat(a.toolsOther ? [a.toolsOther] : []),
+      canShow: a.canShow || "" };
+    if (JSON.stringify(sr) !== JSON.stringify(p.selfReport)) errs.push(`${n}: selfReport differs from derived ${JSON.stringify(sr)}`);
+    const sig = E.signalsFromAnswers(a), ps = p.productSignals || {};
+    for (const k of ["offerKeys", "pay", "wouldPayFor"]) if (JSON.stringify(sig[k]) !== JSON.stringify(ps[k])) errs.push(`${n}: productSignals.${k} ${JSON.stringify(ps[k])} should be ${JSON.stringify(sig[k])}`);
+    if (typeof ps.quote !== "string" || !ps.quote) errs.push(`${n}: productSignals.quote missing`);
+    const ev = new Set(p.practice.domains.map((d) => d.key));
+    const claimed = sr.domains.filter((k) => !ev.has(k)), unticked = [...ev].filter((k) => !sr.domains.includes(k));
+    console.log(`   questionnaire ${a.frequency.padEnd(7)} ticked=[${sr.domains}] claimedNoEpisode=[${claimed}] evidenceNotTicked=[${unticked}] offer=[${a.offer}] pay=${sig.pay || "-"} canShow=${a.canShow || "-"}`);
+  }
   byLevel[lvl]++; byStance[p.practice.stance] = (byStance[p.practice.stance]||0)+1; byDiv[div.kind] = (byDiv[div.kind]||0)+1;
   console.log(`${p.id} ${n.padEnd(8)} L${lvl} ${p.practice.stance.padEnd(10)} mean=${String(mean).padStart(3)} ${band.padEnd(8)} ${div.kind}${p.endedEarly ? "  (ended early)" : ""}`);
 }
 console.log("n =", SEED.length, "byLevel", byLevel, "byStance", byStance, "byDivergence", byDiv);
-const st = E.stats(SEED); console.log("stats.gaps", st.gaps, "strongByDomain", st.strongByDomain, "byDomain", st.byDomain);
+const st = E.stats(SEED); console.log("stats.questionnaire", JSON.stringify(st.questionnaire, null, 1)); console.log("stats.gaps", st.gaps, "strongByDomain", st.strongByDomain, "byDomain", st.byDomain);
 for (const h of E.helpMap(SEED)) console.log(`help ${h.domain.padEnd(8)} helpers=[${h.helpers.map(p=>p.member.name)}] seekers=[${h.seekers.map(p=>p.member.name)}]`);
 if (/—/.test(src("seed.js"))) errs.push("em-dash present in seed.js");
 console.log("size", fs.statSync(path.join(__dirname, "..", "src", "seed.js")).size, "bytes");

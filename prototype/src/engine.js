@@ -360,7 +360,7 @@
     if (!a) return out;
     const keys = (Array.isArray(a.offer) ? a.offer : []).filter((k) => k !== "nothing");
     out.offerKeys = keys;
-    out.pay = a.pay || (Array.isArray(a.offer) && a.offer.includes("nothing") ? "no" : "");
+    out.pay = a.pay || ""; // "nothing for now" members never see the pay question: left blank, tallied via offer.nothing
     const labels = keys.map((k) => P.optionLabel("offer", k));
     if (a.offerOther) labels.push(a.offerOther);
     if (out.pay === "yes" || out.pay === "maybe") out.wouldPayFor = labels.join("; ");

@@ -37,7 +37,7 @@ const MOCK = `
   const state = { errored: false };
   const Q = [
     "Hi NAME, nice to meet you. This is a relaxed conversation about how AI does or doesn't show up in your work. What does a typical week look like for you at the moment?\\n<<PHASE: orient >>",
-    "That sounds like a full week. Does an AI tool show up anywhere in it, even in a small way?\\n<<PHASE: practice >>",
+    "That sounds like a full week. You ticked writing: was the last time you used it for that this week or longer ago?\\n<<CHIPS: [\\"This week\\", \\"This month\\", \\"Longer ago\\"] >>\\n<<PHASE: practice >>",
     "Can you walk me through the most recent time you used it for something like that: what did you type, and what came back?\\n<<PHASE: practice >>",
     "And how did you judge what came back before you used it with the team?\\n<<PHASE: stretch >>",
   ];
@@ -48,7 +48,7 @@ const MOCK = `
     {"id":"r4","task":"Design a short exercise for a team day with an AI tool and adapt it to the team's situation.","level":2}
   ];
   const RATE_MSG = "Thank you, that gives me a good picture. I'd like you to rate your confidence on a few tasks drawn from what you described. There are no right answers.";
-  const GOOD_RATE = RATE_MSG + "\\n<<RATE: " + JSON.stringify(RATE_ITEMS) + " >>\\n<<PHASE: rate >>";
+  const GOOD_RATE = RATE_MSG + "\\n<<RATE: " + JSON.stringify(RATE_ITEMS) + " >>\\n<<CHIPS: [\\"Sure\\", \\"Fine\\"] >>\\n<<PHASE: rate >>";
   const BAD_RATE = RATE_MSG + "\\n<<PHASE: rate >>";
   const FOLLOW = "Interesting: you rate the thinking-partner task much lower than the summary. What makes that one feel further away?\\n<<PHASE: close >>";
   const CLOSE = "Thank you NAME, that was a rich conversation. Your feedback is being prepared now.\\n<<PHASE: close >>\\n<<COMPLETE>>";
@@ -65,6 +65,7 @@ const MOCK = `
   function pick(msgs) {
     const name = (window.__memberName || "Anneke");
     const lu = lastUser(msgs);
+    if (lu.includes("Produce ONE JSON object")) window.__profilePrompt = lu;
     if (lu.includes("Produce ONE JSON object") || lu.includes("That was not valid JSON")) return JSON.stringify(PROFILE).split("NAME").join(name);
     if (lu.includes("[I need to stop here.]")) return CLOSE.split("NAME").join(name);
     if (lu.includes("did not include a valid RATE marker")) { window.__rateRetried = true; return GOOD_RATE; }
@@ -79,6 +80,7 @@ const MOCK = `
   }
   window.__mockCalls = [];
   window.__mockSample = async function (messages, opts) {
+    if (!window.__firstPrompt) window.__firstPrompt = messages[0].content;
     window.__mockCalls.push(messages.map((m) => ({ role: m.role, content: m.content.slice(0, 80) })));
     const text = pick(messages);
     if (opts && opts.onText) {
@@ -132,10 +134,35 @@ async function answer(page, text) {
   await page.waitForSelector("#streaming", { timeout: 5000 }).catch(() => {});
 }
 
-async function startInterview(page, name, role) {
+async function startLanding(page, name, role) {
   await page.fill("#f-name", name);
   await page.fill("#f-role", role);
   await page.click("#btn-start");
+  await page.waitForSelector("#questionnaire");
+}
+// Fill the opening questionnaire. kind: "weekly" (regular user) or "never".
+async function fillQuestionnaire(page, kind = "weekly") {
+  if (kind === "never") {
+    await page.click("label[for='q-frequency-never']");
+    await page.click("label[for='q-stance-sceptical']");
+    await page.click("label[for='q-offer-nothing']");
+  } else {
+    await page.click("label[for='q-frequency-weekly']");
+    await page.click("label[for='q-uses-writing']");
+    await page.click("label[for='q-uses-prep']");
+    await page.click("label[for='q-tools-ChatGPT']");
+    await page.fill("#q-tools-other", "Otter");
+    await page.click("label[for='q-stance-pragmatic']");
+    await page.click("label[for='q-offer-peer-halfday']");
+    await page.click("label[for='q-pay-maybe']");
+    await page.click("label[for='q-canShow-yes']");
+  }
+}
+async function startInterview(page, name, role, kind = "weekly", shot) {
+  await startLanding(page, name, role);
+  await fillQuestionnaire(page, kind);
+  if (shot) await shot();
+  await page.click("#btn-q-continue");
   await page.waitForSelector("#interview");
 }
 
@@ -143,13 +170,38 @@ async function fullFlow(page, tag, opts = {}) {
   const shot = (n) => page.screenshot({ path: path.join(SHOTS, `${n}-${tag}.png`), fullPage: true });
   await shot("landing");
   if (opts.max) await noOverflow(page, "landing " + tag, opts.max);
-  await startInterview(page, "Anneke", "team coach, mostly healthcare organisations");
+  await startLanding(page, "Anneke", "team coach, mostly healthcare organisations");
+  // Required validation: continue with nothing ticked
+  await page.click("#btn-q-continue");
+  const reqErr = await page.isVisible("#q-err-frequency");
+  check("questionnaire shows inline required error (" + tag + ")", reqErr && (await page.isVisible("#q-err-stance")));
+  check("questionnaire does not advance when invalid (" + tag + ")", (await page.locator("#interview").count()) === 0);
+  const qText = await page.textContent("#questionnaire");
+  check("questionnaire rendered from Prompts.QUESTIONNAIRE (" + tag + ")", await page.evaluate((t) => Prompts.QUESTION_ORDER.every((q) => t.includes(Prompts.QUESTIONNAIRE[q].label)), qText));
+  await fillQuestionnaire(page, "weekly");
+  await shot("questionnaire");
+  if (opts.max) await noOverflow(page, "questionnaire " + tag, opts.max);
+  check("uses hint shown (" + tag + ")", qText.includes(await page.evaluate(() => Prompts.QUESTIONNAIRE.uses.options[0].hint)));
+  await page.click("#btn-q-continue");
+  await page.waitForSelector("#interview");
   await page.waitForSelector(".bubble.interviewer");
   await waitIdle(page);
   const first = await page.textContent(".bubble.interviewer");
   check("first interviewer turn greets by name (" + tag + ")", first.includes("Hi Anneke"), first);
   await answer(page, "I coach teams in hospitals, mostly three days a week, and write a lot of summaries.");
-  await answer(page, "Yes, I use ChatGPT for the summaries after a session.");
+  await waitIdle(page);
+  await page.waitForSelector("#chips:not([hidden]) .chip");
+  const chipTexts = await page.$$eval("#chips .chip", (els) => els.map((e) => e.textContent));
+  check("chips render from CHIPS marker (" + tag + ")", chipTexts.join("|") === "This week|This month|Longer ago", chipTexts.join("|"));
+  await shot("chips");
+  if (opts.max) await noOverflow(page, "chips " + tag, opts.max);
+  await page.click("#chips .chip >> text=This month");
+  await page.waitForSelector("#streaming", { timeout: 5000 }).catch(() => {});
+  const lastMember = await page.$$eval(".bubble.member", (els) => els[els.length - 1].textContent);
+  check("tapping a chip sends its text as the answer (" + tag + ")", lastMember === "This month", lastMember);
+  check("chips cleared after use (" + tag + ")", (await page.locator("#chips .chip").count()) === 0);
+  const turnText = await page.evaluate(() => MemberView._state.interview.turns.filter((t) => t.role === "member").map((t) => t.text).join("|"));
+  check("chip answer recorded in transcript (" + tag + ")", turnText.endsWith("|This month"), turnText);
   await shot("interview");
   if (opts.max) await noOverflow(page, "interview " + tag, opts.max);
   await answer(page, "I pasted my notes and asked for a one-page summary for the client. It came back too smooth.");
@@ -158,6 +210,7 @@ async function fullFlow(page, tag, opts = {}) {
   await waitIdle(page);
   const cards = await page.locator("#rate-card").count();
   check("rating card appears exactly once (" + tag + ")", cards === 1, String(cards));
+  check("no chips with the rating card (" + tag + ")", (await page.locator("#chips .chip").count()) === 0 && (await page.evaluate(() => document.getElementById("chips").hidden)));
   const composerHidden = await page.evaluate(() => document.getElementById("composer").hidden);
   check("composer hidden while rating (" + tag + ")", composerHidden === true);
   const order = await page.$$eval("#rate-card .rate-item", (els) => els.map((e) => e.dataset.id));
@@ -189,6 +242,9 @@ async function fullFlow(page, tag, opts = {}) {
   check("confidence ratings listed (" + tag + ")", fbText.includes("Your confidence ratings") && fbText.includes("skipped"));
   const saveStatus = await page.textContent("#save-status");
   check("save status says device only without db (" + tag + ")", saveStatus.includes("Saved on this device only"), saveStatus);
+  const pp = await page.evaluate(() => window.__profilePrompt || "");
+  check("profile request contains the questionnaire summary (" + tag + ")", pp.includes("opening questionnaire") && pp.includes("Most weeks") && pp.includes("other: Otter"));
+  check("no chips after completion (" + tag + ")", (await page.locator(".chip").count()) === 0);
   const leaks = await page.evaluate(() => window.__leaks);
   check("no '<<' ever visible in a bubble (" + tag + ")", leaks.length === 0, JSON.stringify(leaks).slice(0, 200));
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("aiwd.profiles") || "[]"));
@@ -196,6 +252,8 @@ async function fullFlow(page, tag, opts = {}) {
   if (stored.length) {
     check("stored profile has transcript and ratings (" + tag + ")", Array.isArray(stored[0].transcript) && stored[0].transcript.length > 8 && stored[0].confidence.items.length === 4 && stored[0].confidence.mean === 75, JSON.stringify(stored[0].confidence));
     check("stored profile source is live and level from model (" + tag + ")", stored[0].source === "live" && stored[0].practice.level === 2);
+    const qa = stored[0].questionnaire || {};
+    check("stored profile carries questionnaire answers (" + tag + ")", qa.frequency === "weekly" && qa.uses.join() === "writing,prep" && qa.toolsOther === "Otter" && qa.pay === "maybe" && qa.canShow === "yes", JSON.stringify(qa));
   }
   const draft = await page.evaluate(() => localStorage.getItem("aiwd.draft"));
   check("draft cleared after completion (" + tag + ")", draft === null);
@@ -305,8 +363,11 @@ async function fullFlow(page, tag, opts = {}) {
       await waitIdle(page);
       await answer(page, "first answer");
       await waitIdle(page);
+      await page.waitForSelector("#chips .chip");
       await answer(page, "second answer that will fail once");
+      check("typing an answer clears the chips", (await page.locator("#chips .chip").count()) === 0);
       await page.waitForSelector("#btn-retry", { timeout: 10000 });
+      check("no chips with the error box", (await page.locator("#chips .chip").count()) === 0);
       const errText = await page.textContent("#turn-error-box");
       check("error UI shows the message", errText.includes("mock failure"), errText);
       check("no streaming bubble left behind on error", (await page.locator("#streaming").count()) === 0);
@@ -336,6 +397,74 @@ async function fullFlow(page, tag, opts = {}) {
       check("draft resume restores transcript", bubbles === 3, String(bubbles));
       const hint = await page.textContent("#phase-hint");
       check("phase hint shows practice after resume", hint.includes("your practice"), hint);
+      check("chips restored on resume", (await page.locator("#chips .chip").count()) === 3);
+      const ans = await page.evaluate(() => MemberView._state.interview.answers);
+      check("questionnaire answers restored with the interview", ans && ans.frequency === "weekly" && ans.stance === "pragmatic", JSON.stringify(ans));
+      await ctx.close();
+    }
+    // 7b. Resume mid-questionnaire restores answers and lands on the questionnaire
+    {
+      const { ctx, page } = await newPage(browser, url);
+      await startLanding(page, "Cees", "trainer");
+      await page.click("label[for='q-frequency-daily']");
+      await page.click("label[for='q-uses-analysis']");
+      await page.fill("#q-offer-other", "a reading group");
+      await page.reload();
+      await page.waitForSelector("#draft-card");
+      const dtext = await page.textContent("#draft-card");
+      check("draft card mentions unfinished quick questions", dtext.includes("quick questions are not finished"), dtext);
+      await page.click("#btn-continue");
+      await page.waitForSelector("#questionnaire");
+      const restored = await page.evaluate(() => ({
+        daily: document.getElementById("q-frequency-daily").checked,
+        analysis: document.getElementById("q-uses-analysis").checked,
+        other: document.getElementById("q-offer-other").value,
+      }));
+      check("resume restores questionnaire answers", restored.daily && restored.analysis && restored.other === "a reading group", JSON.stringify(restored));
+      check("resume lands on questionnaire, not chat", (await page.locator("#interview").count()) === 0);
+      await ctx.close();
+    }
+    // 7c. "Never" path and exclusive "Nothing for now"
+    {
+      const { ctx, page } = await newPage(browser, url, { name: "Bram" });
+      await startLanding(page, "Bram", "mediator");
+      await page.click("label[for='q-frequency-weekly']");
+      const visible = (id) => page.evaluate((i) => !document.getElementById(i).hidden, id);
+      check("uses/tools/canShow visible for weekly", (await visible("q-uses")) && (await visible("q-tools")) && (await visible("q-canShow")));
+      await page.click("label[for='q-offer-demos']");
+      await page.click("label[for='q-offer-one-to-one']");
+      check("pay visible when an offer is ticked", await visible("q-pay"));
+      await page.click("label[for='q-offer-nothing']");
+      const ex1 = await page.evaluate(() => ["demos", "one-to-one", "nothing"].map((k) => document.getElementById("q-offer-" + k).checked));
+      check("'Nothing for now' unticks the others", ex1.join() === "false,false,true", ex1.join());
+      check("pay hidden when offer is nothing", !(await visible("q-pay")));
+      await page.click("label[for='q-offer-demos']");
+      const ex2 = await page.evaluate(() => ["demos", "nothing"].map((k) => document.getElementById("q-offer-" + k).checked));
+      check("ticking another option unticks 'Nothing for now'", ex2.join() === "true,false", ex2.join());
+      await page.click("label[for='q-offer-demos']");
+      await page.click("label[for='q-frequency-tried']");
+      check("canShow hidden for tried", !(await visible("q-canShow")) && (await visible("q-uses")));
+      await page.click("label[for='q-uses-writing']");
+      await page.click("label[for='q-frequency-never']");
+      check("uses/tools/canShow hidden live for never", !(await visible("q-uses")) && !(await visible("q-tools")) && !(await visible("q-canShow")));
+      await page.click("label[for='q-stance-sceptical']");
+      await page.click("label[for='q-offer-nothing']");
+      const ans = await page.evaluate(() => MemberView._state.answers);
+      check("skipped questions dropped from answers", !("uses" in ans) && !("tools" in ans) && !("canShow" in ans) && !("pay" in ans) && ans.frequency === "never" && ans.offer.join() === "nothing", JSON.stringify(ans));
+      await page.click("#btn-q-continue");
+      await page.waitForSelector("#interview");
+      await waitIdle(page);
+      const fp = await page.evaluate(() => window.__firstPrompt || "");
+      check("non-user interviewer prompt says 'has not used AI tools in their work'", fp.includes("Bram has not used AI tools in their work"));
+      await ctx.close();
+    }
+    // 7d. Questionnaire screenshots: phone dark (overflow) and desktop dark
+    {
+      const { ctx, page } = await newPage(browser, url, { viewport: { width: 400, height: 800 }, dark: true });
+      await startLanding(page, "Anneke", "coach");
+      await fillQuestionnaire(page, "weekly");
+      await page.screenshot({ path: path.join(SHOTS, "questionnaire-phone-dark-filled.png"), fullPage: true });
+      await noOverflow(page, "questionnaire phone dark", 400);
       await ctx.close();
     }
     // 8. No Claude at all → clear message, interview does not start

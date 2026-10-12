@@ -42,8 +42,11 @@
     divergence: { kind: "aligned", note: "Confidence and described practice are broadly in step." },
     wants: ["make my rules for client material explicit instead of improvising them", "get better at using it as a sparring partner on a case without it flattering me"],
     offers: ["can show how I prepare a team day from intake notes with it", "can show how I cluster interview notes and check the result"],
+    questionnaire: {frequency: "daily", uses: ["writing", "prep", "analysis", "thinking", "learning"], tools: ["ChatGPT", "Claude", "Transcription tool"], stance: "pragmatic", offer: ["peer-halfday", "demos"], pay: "yes", canShow: "yes"},
+    selfReport: {frequency: "daily", domains: ["writing", "prep", "analysis", "thinking", "learning"], tools: ["ChatGPT", "Claude", "Transcription tool"], canShow: "yes"},
     productSignals: {
-      wouldPayFor: "a half-day with peers from this network, not a generic course",
+      offerKeys: ["peer-halfday", "demos"], pay: "yes",
+      wouldPayFor: "A half-day with peers from this network; Short demos from colleagues",
       quote: "I have done the generic course. What I want is to sit with five people who do the same work and compare how we actually use it."
     },
     feedback: {
@@ -96,8 +99,11 @@
     divergence: { kind: "aligned", note: "Confidence and described practice are broadly in step." },
     wants: ["know what is safe with client material before I go any further", "stop retyping my own notes after a session"],
     offers: [],
+    questionnaire: {frequency: "tried", uses: ["writing", "learning"], tools: ["ChatGPT"], stance: "sceptical", offer: ["confidentiality"], pay: "maybe"},
+    selfReport: {frequency: "tried", domains: ["writing", "learning"], tools: ["ChatGPT"], canShow: ""},
     productSignals: {
-      wouldPayFor: "a checklist for client confidentiality",
+      offerKeys: ["confidentiality"], pay: "maybe",
+      wouldPayFor: "A checklist for using it safely with client material",
       quote: "If someone I trust tells me plainly what is and is not safe, that is worth paying for. Another webinar about the future is not."
     },
     feedback: {
@@ -153,8 +159,11 @@
     divergence: { kind: "aligned", note: "Confidence and described practice are broadly in step." },
     wants: ["use it to prepare difficult conversations without feeding it personnel details", "find out whether it can help me sense the mood of a team from meeting minutes, or whether that is a bad idea"],
     offers: [],
+    questionnaire: {frequency: "daily", uses: ["writing", "analysis", "admin", "building"], tools: ["Microsoft Copilot"], stance: "pragmatic", offer: ["one-to-one"], pay: "yes", canShow: "maybe"},
+    selfReport: {frequency: "daily", domains: ["writing", "analysis", "admin", "building"], tools: ["Microsoft Copilot"], canShow: "maybe"},
     productSignals: {
-      wouldPayFor: "someone to look at how I work for an hour",
+      offerKeys: ["one-to-one"], pay: "yes",
+      wouldPayFor: "An hour with someone looking at how I work",
       quote: "An hour with someone who looks over my shoulder and says: you are wasting time here, try this. That I would pay for."
     },
     feedback: {
@@ -214,7 +223,10 @@
     divergence: { kind: "aligned", note: "Confidence and described practice are broadly in step." },
     wants: ["find peers who are as far along, to compare where it misleads us"],
     offers: ["can show my prompt templates for intake summaries and module design", "can show the AI reflection exercise I run with participants and how I debrief it"],
+    questionnaire: {frequency: "daily", uses: ["writing", "prep", "analysis", "thinking", "client", "learning", "building"], tools: ["ChatGPT", "Microsoft Copilot", "Claude", "NotebookLM"], stance: "enthusiast", offer: ["peer-halfday", "demos"], offerOther: "a small group of people who are as far along as I am", pay: "no", canShow: "yes"},
+    selfReport: {frequency: "daily", domains: ["writing", "prep", "analysis", "thinking", "client", "learning", "building"], tools: ["ChatGPT", "Microsoft Copilot", "Claude", "NotebookLM"], canShow: "yes"},
     productSignals: {
+      offerKeys: ["peer-halfday", "demos"], pay: "no",
       wouldPayFor: "",
       quote: "I would give a session for the network for free. What I would pay for does not exist yet: a small group of people who are as far along as I am."
     },
@@ -273,8 +285,11 @@
     divergence: { kind: "cautious-practitioner", note: "Rates their confidence well below what their described practice would predict." },
     wants: ["be able to explain to a client how I use it without feeling I am confessing", "see how others check the output on legal and governance questions"],
     offers: ["can show how I read a set of governance documents for contradictions with it"],
+    questionnaire: {frequency: "daily", uses: ["writing", "analysis"], tools: ["ChatGPT", "Perplexity"], stance: "cautious", offer: ["one-to-one"], pay: "maybe", canShow: "yes"},
+    selfReport: {frequency: "daily", domains: ["writing", "analysis"], tools: ["ChatGPT", "Perplexity"], canShow: "yes"},
     productSignals: {
-      wouldPayFor: "someone to look at how I work for an hour",
+      offerKeys: ["one-to-one"], pay: "maybe",
+      wouldPayFor: "An hour with someone looking at how I work",
       quote: "I want someone to watch me do it and tell me whether I am being careful or just slow."
     },
     feedback: {
@@ -325,8 +340,11 @@
     divergence: { kind: "aligned", note: "Confidence and described practice are broadly in step." },
     wants: [],
     offers: [],
+    questionnaire: {frequency: "never", stance: "sceptical", offer: ["nothing"]},
+    selfReport: {frequency: "never", domains: [], tools: [], canShow: ""},
     productSignals: {
-      wouldPayFor: "nothing, I'd rather figure it out myself if I ever need to",
+      offerKeys: [], pay: "",
+      wouldPayFor: "",
       quote: "I have thirty years of practice in reading a room. I am not going to ask a machine what to think."
     },
     feedback: {
@@ -380,8 +398,11 @@
     divergence: { kind: "confident-starter", note: "Rates their confidence well above what their described practice would predict." },
     wants: ["use it to prepare workshop designs I actually use", "know what is safe to paste in the hospital's Copilot", "stop retyping meeting notes"],
     offers: [],
+    questionnaire: {frequency: "monthly", uses: ["prep", "analysis", "client", "admin"], tools: ["Microsoft Copilot"], stance: "enthusiast", offer: ["peer-halfday", "confidentiality"], pay: "maybe", canShow: "maybe"},
+    selfReport: {frequency: "monthly", domains: ["prep", "analysis", "client", "admin"], tools: ["Microsoft Copilot"], canShow: "maybe"},
     productSignals: {
-      wouldPayFor: "a half-day with peers from this network, not a generic course",
+      offerKeys: ["peer-halfday", "confidentiality"], pay: "maybe",
+      wouldPayFor: "A half-day with peers from this network; A checklist for using it safely with client material",
       quote: "A morning with other team coaches who show what they do. I would ask the hospital to pay for that."
     },
     feedback: {
@@ -437,7 +458,10 @@
     divergence: { kind: "aligned", note: "Confidence and described practice are broadly in step." },
     wants: ["find out whether it is any use at all on the relational side, or whether I am right that it is not"],
     offers: [],
+    questionnaire: {frequency: "weekly", uses: ["writing", "admin"], tools: ["ChatGPT"], stance: "sceptical", offer: ["nothing"], canShow: "no"},
+    selfReport: {frequency: "weekly", domains: ["writing", "admin"], tools: ["ChatGPT"], canShow: "no"},
     productSignals: {
+      offerKeys: [], pay: "",
       wouldPayFor: "",
       quote: "I would not pay for anything about AI. I would pay for a good conversation about advising family businesses, and if AI comes up, fine."
     },
@@ -494,8 +518,11 @@
     divergence: { kind: "cautious-practitioner", note: "Rates their confidence well below what their described practice would predict." },
     wants: ["find out whether my way of prompting is good enough or whether I am missing something", "use it to prepare training designs for groups I do not know well"],
     offers: [],
+    questionnaire: {frequency: "weekly", uses: ["prep"], tools: ["ChatGPT", "Gemini"], stance: "cautious", offer: ["prompt-library", "demos"], pay: "maybe", canShow: "no"},
+    selfReport: {frequency: "weekly", domains: ["prep"], tools: ["ChatGPT", "Gemini"], canShow: "no"},
     productSignals: {
-      wouldPayFor: "a shared library of prompts from colleagues",
+      offerKeys: ["prompt-library", "demos"], pay: "maybe",
+      wouldPayFor: "A shared library of prompts from colleagues; Short demos from colleagues",
       quote: "If I could see how five other trainers ask for scenarios, I would know in ten minutes whether I am doing it wrong."
     },
     feedback: {
@@ -548,8 +575,11 @@
     divergence: { kind: "cautious-practitioner", note: "Rates their confidence well below what their described practice would predict." },
     wants: ["know what is safe with staff and pupil data before anything else", "understand what it is doing to teachers' judgement, from someone who is not selling it"],
     offers: [],
+    questionnaire: {frequency: "tried", uses: ["writing", "learning"], tools: ["ChatGPT"], stance: "worried", offer: ["confidentiality"], pay: "maybe"},
+    selfReport: {frequency: "tried", domains: ["writing", "learning"], tools: ["ChatGPT"], canShow: ""},
     productSignals: {
-      wouldPayFor: "a checklist for client confidentiality",
+      offerKeys: ["confidentiality"], pay: "maybe",
+      wouldPayFor: "A checklist for using it safely with client material",
       quote: "Give me one page that says what I may and may not do with school data, written by someone who is not trying to sell me something."
     },
     feedback: {
@@ -606,8 +636,11 @@
     divergence: { kind: "aligned", note: "Confidence and described practice are broadly in step." },
     wants: ["find a way to teach my reflection routine without it sounding like a cult"],
     offers: ["can show my after-session reflection routine, including the consent and anonymisation rules", "can show how I prepare a leadership team offsite from intake notes"],
+    questionnaire: {frequency: "daily", uses: ["writing", "prep", "analysis", "thinking", "admin"], tools: ["Claude", "Transcription tool"], stance: "enthusiast", offer: ["peer-halfday"], pay: "yes", canShow: "yes"},
+    selfReport: {frequency: "daily", domains: ["writing", "prep", "analysis", "thinking", "admin"], tools: ["Claude", "Transcription tool"], canShow: "yes"},
     productSignals: {
-      wouldPayFor: "a half-day with peers from this network, not a generic course",
+      offerKeys: ["peer-halfday"], pay: "yes",
+      wouldPayFor: "A half-day with peers from this network",
       quote: "Put me in a room with four coaches who use it as a thinking partner and I will clear my diary."
     },
     feedback: {
@@ -659,7 +692,10 @@
     divergence: { kind: "aligned", note: "Confidence and described practice are broadly in step." },
     wants: ["understand what it does to the quality of thinking in government bodies, with evidence", "know what is safe with client material before I try anything"],
     offers: [],
+    questionnaire: {frequency: "never", stance: "worried", offer: ["nothing"]},
+    selfReport: {frequency: "never", domains: [], tools: [], canShow: ""},
     productSignals: {
+      offerKeys: [], pay: "",
       wouldPayFor: "",
       quote: "I would attend something serious about what this does to public organisations. I would not pay for a prompt workshop."
     },
@@ -715,8 +751,11 @@
     divergence: { kind: "aligned", note: "Confidence and described practice are broadly in step." },
     wants: ["use it to think through a stalled case without it giving me textbook answers", "see how colleagues anonymise their notes"],
     offers: [],
+    questionnaire: {frequency: "weekly", uses: ["writing", "analysis", "thinking", "learning"], tools: ["ChatGPT", "NotebookLM"], stance: "pragmatic", offer: ["prompt-library", "confidentiality"], pay: "maybe", canShow: "maybe"},
+    selfReport: {frequency: "weekly", domains: ["writing", "analysis", "thinking", "learning"], tools: ["ChatGPT", "NotebookLM"], canShow: "maybe"},
     productSignals: {
-      wouldPayFor: "a shared library of prompts from colleagues",
+      offerKeys: ["prompt-library", "confidentiality"], pay: "maybe",
+      wouldPayFor: "A shared library of prompts from colleagues; A checklist for using it safely with client material",
       quote: "I would pay a small amount for a folder of prompts from people in this network, with a line on what they use each one for."
     },
     feedback: {
@@ -775,8 +814,11 @@
     divergence: { kind: "aligned", note: "Confidence and described practice are broadly in step." },
     wants: ["get the institution's rules for AI on interview data written and signed off", "find out how others keep a team using a tool after the adviser leaves"],
     offers: ["can show how I interrogate a round of interview notes in NotebookLM", "can show how I argue with it when designing an intervention"],
+    questionnaire: {frequency: "weekly", uses: ["writing", "prep", "analysis", "thinking", "client"], tools: ["Microsoft Copilot", "NotebookLM"], stance: "pragmatic", offer: ["peer-halfday", "prompt-library"], pay: "yes", canShow: "yes"},
+    selfReport: {frequency: "weekly", domains: ["writing", "prep", "analysis", "thinking", "client"], tools: ["Microsoft Copilot", "NotebookLM"], canShow: "yes"},
     productSignals: {
-      wouldPayFor: "a half-day with peers from this network, not a generic course",
+      offerKeys: ["peer-halfday", "prompt-library"], pay: "yes",
+      wouldPayFor: "A half-day with peers from this network; A shared library of prompts from colleagues",
       quote: "The hogeschool would pay for a half-day if it is with people who do my kind of work. Not for another vendor session."
     },
     feedback: {
@@ -830,7 +872,10 @@
     divergence: { kind: "aligned", note: "Confidence and described practice are broadly in step." },
     wants: ["stop retyping my notes after a training day", "use it to prepare a training for a group I have not met"],
     offers: [],
+    questionnaire: {frequency: "tried", uses: ["writing", "prep", "admin"], tools: ["ChatGPT", "Transcription tool"], stance: "pragmatic", offer: ["demos"], pay: "no"},
+    selfReport: {frequency: "tried", domains: ["writing", "prep", "admin"], tools: ["ChatGPT", "Transcription tool"], canShow: ""},
     productSignals: {
+      offerKeys: ["demos"], pay: "no",
       wouldPayFor: "",
       quote: "I would come to something from the network if it is two hours and I leave with one thing I can use on Monday."
     },
@@ -881,8 +926,11 @@
     divergence: { kind: "confident-starter", note: "Rates their confidence well above what their described practice would predict." },
     wants: ["see one example of a team coach using it for session preparation before I decide whether it is for me"],
     offers: [],
+    questionnaire: {frequency: "never", stance: "pragmatic", offer: ["nothing"]},
+    selfReport: {frequency: "never", domains: [], tools: [], canShow: ""},
     productSignals: {
-      wouldPayFor: "nothing yet; I would come to a free lunchtime demo from a colleague",
+      offerKeys: [], pay: "",
+      wouldPayFor: "",
       quote: "Show me one colleague doing one real thing with it. Then I will know in ten minutes."
     },
     feedback: {

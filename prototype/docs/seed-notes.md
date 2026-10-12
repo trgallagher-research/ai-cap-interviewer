@@ -2,33 +2,34 @@
 
 16 fictional members of Systeeminterventies, written to look like real people in that network
 rather than a demo. Verified against engine.js with `node tests/seed-check.js` (mean, band,
-divergence, domain keys, level labels, stances, rating steps, unique ids). Today is 2026-10-12;
+divergence via `Engine.divergenceFor`, domain keys, level labels, stances, rating steps, unique ids,
+and the questionnaire fields: defined keys only, skipped questions absent, `selfReport` and
+`productSignals` equal to what `assembleProfile` / `Engine.signalsFromAnswers` derive). Today is 2026-10-12;
 `createdAt` runs 2026-09-14 to 2026-10-10.
 
 ## The members
 
-| id | Name | Role (own words) | Org | Level | Stance | Mean | Band | Divergence | Notes |
-|---|---|---|---|---|---|---|---|---|---|
-| seed_01 | Anneke | team coach, mostly healthcare organisations | independent | 3 Integrated | pragmatic | 70 | moderate | aligned | Claude/ChatGPT/Otter; 2 offers (prep, analysis) |
-| seed_02 | Bram | independent mediator, labour disputes | independent | 1 Exploring | sceptical | 35 | low | aligned | data question unanswered; wants a confidentiality checklist |
-| seed_03 | Joris | interim manager in municipalities | independent | 2 Routine | pragmatic | 60 | moderate | aligned | Copilot inside tenant; admin/writing/analysis |
-| seed_04 | Marieke | trainer, leadership programmes for first-line managers | small bureau | 4 Shaping | enthusiast | 85 | high | aligned | only level 4; 6 domains incl. building and client; 2 offers; wouldPayFor empty |
-| seed_05 | Fatima | organisational adviser, co-operatives and housing associations | independent | 3 Integrated | cautious | 46 | moderate | cautious-practitioner | describes level-3 practice, rates low; 1 offer |
-| seed_06 | Dirk | mediator, family businesses and partner conflicts | independent | 0 Not yet | sceptical | 15 | low | aligned | principled non-user; endedEarly; no wants/offers |
-| seed_07 | Sanne | team coach, in-house at a hospital | in-house at a hospital | 1 Exploring | enthusiast | 70 | moderate | confident-starter | talks more than uses; 3 wants, 0 offers |
-| seed_08 | Pieter | organisational adviser, manufacturing and family-owned SMEs | small bureau | 2 Routine | sceptical | 55 | moderate | aligned | the sceptic who uses it anyway; would not pay for anything AI |
-| seed_09 | Lotte | trainer, conflict skills and feedback for teams | small bureau | 2 Routine | cautious | 36 | low | cautious-practitioner | weekly routine, rates low after a colleague called her prompts naive |
-| seed_10 | Tjeerd | interim director, schools and school boards | independent | 1 Exploring | worried | 30 | low | cautious-practitioner | endedEarly; third item rating undefined (mean over 2 items) |
-| seed_11 | Noor | executive coach and leadership team coach | independent | 3 Integrated | enthusiast | 75 | high | aligned | thinking-partner routine; 2 offers; only admin helper |
-| seed_12 | Harm | organisational adviser, water boards and provincial government | independent | 0 Not yet | worried | 20 | low | aligned | reads about it, never typed into one; one `learning` domain |
-| seed_13 | Esther | mediator, team mediation in healthcare and welfare | small bureau | 2 Routine | pragmatic | 61 | moderate | aligned | asked IT what is allowed; NotebookLM |
-| seed_14 | Kwame | organisational development adviser, in-house at a hogeschool | in-house at a university of applied sciences | 3 Integrated | pragmatic | 68 | moderate | aligned | Copilot/NotebookLM; client domain; 2 offers |
-| seed_15 | Wouter | trainer, communication and feedback skills for teams | small bureau | 1 Exploring | pragmatic | 45 | moderate | aligned | one concrete chore (retyping notes); wouldPayFor empty |
-| seed_16 | Ilse | team coach and supervisor, education and childcare | independent | 0 Not yet | pragmatic | 72 | high | confident-starter | non-user who expects to pick it up easily |
+| id | Name | Role (own words) | Org | Level | Stance | Mean | Band | Divergence | Freq (self) | Notes |
+|---|---|---|---|---|---|---|---|---|---|---|
+| seed_01 | Anneke | team coach, mostly healthcare organisations | independent | 3 Integrated | pragmatic | 70 | moderate | aligned | daily | Claude/ChatGPT/Otter; 2 offers (prep, analysis) |
+| seed_02 | Bram | independent mediator, labour disputes | independent | 1 Exploring | sceptical | 35 | low | aligned | tried | data question unanswered; wants a confidentiality checklist |
+| seed_03 | Joris | interim manager in municipalities | independent | 2 Routine | pragmatic | 60 | moderate | aligned | daily | Copilot inside tenant; admin/writing/analysis |
+| seed_04 | Marieke | trainer, leadership programmes for first-line managers | small bureau | 4 Shaping | enthusiast | 85 | high | aligned | daily | only level 4; 6 domains incl. building and client; 2 offers; wouldPayFor empty |
+| seed_05 | Fatima | organisational adviser, co-operatives and housing associations | independent | 3 Integrated | cautious | 46 | moderate | cautious-practitioner | daily | describes level-3 practice, rates low; 1 offer |
+| seed_06 | Dirk | mediator, family businesses and partner conflicts | independent | 0 Not yet | sceptical | 15 | low | aligned | never | principled non-user; endedEarly; no wants/offers |
+| seed_07 | Sanne | team coach, in-house at a hospital | in-house at a hospital | 1 Exploring | enthusiast | 70 | moderate | confident-starter | monthly | talks more than uses; 3 wants, 0 offers |
+| seed_08 | Pieter | organisational adviser, manufacturing and family-owned SMEs | small bureau | 2 Routine | sceptical | 55 | moderate | aligned | weekly | the sceptic who uses it anyway; would not pay for anything AI |
+| seed_09 | Lotte | trainer, conflict skills and feedback for teams | small bureau | 2 Routine | cautious | 36 | low | cautious-practitioner | weekly | weekly routine, rates low after a colleague called her prompts naive |
+| seed_10 | Tjeerd | interim director, schools and school boards | independent | 1 Exploring | worried | 30 | low | cautious-practitioner | tried | endedEarly; third item rating undefined (mean over 2 items) |
+| seed_11 | Noor | executive coach and leadership team coach | independent | 3 Integrated | enthusiast | 75 | high | aligned | daily | thinking-partner routine; 2 offers; only admin helper |
+| seed_12 | Harm | organisational adviser, water boards and provincial government | independent | 0 Not yet | worried | 20 | low | aligned | never | reads about it, never typed into one; one `learning` domain |
+| seed_13 | Esther | mediator, team mediation in healthcare and welfare | small bureau | 2 Routine | pragmatic | 61 | moderate | aligned | weekly | asked IT what is allowed; NotebookLM |
+| seed_14 | Kwame | organisational development adviser, in-house at a hogeschool | in-house at a university of applied sciences | 3 Integrated | pragmatic | 68 | moderate | aligned | weekly | Copilot/NotebookLM; client domain; 2 offers |
+| seed_15 | Wouter | trainer, communication and feedback skills for teams | small bureau | 1 Exploring | pragmatic | 45 | moderate | aligned | tried | one concrete chore (retyping notes); wouldPayFor empty |
+| seed_16 | Ilse | team coach and supervisor, education and childcare | independent | 0 Not yet | pragmatic | 72 | high | confident-starter | never | non-user who expects to pick it up easily |
 
 Totals: byLevel [3, 4, 4, 4, 1]; byStance pragmatic 6, enthusiast 3, sceptical 3, cautious 2,
-worried 2; byDivergence aligned 12, confident-starter 2, cautious-practitioner 2; network mean
-confidence 51.
+worried 2; byDivergence (divergenceFor) aligned 11, confident-starter 2, cautious-practitioner 3.
 
 ## Patterns built in on purpose (what the organiser view should surface)
 
@@ -57,8 +58,10 @@ among strong users (Joris, Noor, Kwame). `writing` and `analysis` are where the 
 
 **Confidence vs practice.**
 - Confident starters: Sanne (level 1, mean 70) rates herself on tasks she has not done; Ilse
-  (level 0, mean 45) expects to pick it up easily.
-- Cautious practitioners: Fatima (level 3, mean 46) and Lotte (level 2, mean 36) both describe
+  (level 0, mean 72) expects to pick it up easily.
+- Cautious practitioners: Tjeerd (level 1, two ratings only, residual -25 against expected 55)
+  is one by the item-level rule; read him as worried rather than modest.
+- Fatima (level 3, mean 46) and Lotte (level 2, mean 36) both describe
   routine or integrated practice and rate themselves low, for different reasons (Fatima: cannot
   explain what she cannot verify; Lotte: a colleague's remark).
 - Within each profile the ratings also tell a shape: high on drafting/digesting own notes,
@@ -71,17 +74,38 @@ sceptical light user with a concrete data question (Bram), and one sceptical *ro
 (Pieter: "a fast typist with no judgement, and that is useful"). The share-back prompt asks
 for a finding on scepticism; these five give it material without caricature.
 
-**Product signals (productSignals.wouldPayFor).**
-- "a half-day with peers from this network, not a generic course": Anneke, Sanne, Noor, Kwame (4)
-- "someone to look at how I work for an hour": Joris, Fatima (2)
-- "a checklist for client confidentiality": Bram, Tjeerd (2)
-- "a shared library of prompts from colleagues": Lotte, Esther (2)
-- "nothing": Dirk, Ilse (with a free demo caveat) (2)
-- empty: Marieke (would give, not pay), Pieter (would pay for a conversation about family
-  businesses, not AI), Harm (serious session on public organisations, not a prompt workshop),
-  Wouter (two hours, one thing for Monday) (4)
-The product read should land on peer-led, network-specific formats and say generic training is
-not supported.
+**Product signals (now derived from the questionnaire by `Engine.signalsFromAnswers`).**
+`wouldPayFor` is the joined option labels when pay is yes/maybe, else empty; the round-one
+free-text versions were replaced. Each member keeps their verbatim `quote`.
+- offer ticks: peer-halfday 5 (Anneke, Marieke, Sanne, Noor, Kwame), confidentiality 4 (Bram,
+  Sanne, Tjeerd, Esther), demos 4 (Anneke, Marieke, Lotte, Wouter), prompt-library 3 (Lotte,
+  Esther, Kwame), one-to-one 2 (Joris, Fatima), nothing 4 (Dirk, Pieter, Harm, Ilse).
+- pay as answered: yes 4 (Anneke, Joris, Noor, Kwame), maybe 6 (Bram, Fatima, Sanne, Lotte,
+  Tjeerd, Esther), no 2 (Marieke: "what I would pay for does not exist yet"; Wouter).
+  The four "nothing for now" members never see the pay question; their pay is blank and they are
+  counted under `stats.questionnaire.offer.nothing`, so `stats.questionnaire.pay` is yes 4 / maybe 6 / no 2.
+- Marieke uses `offerOther` ("a small group of people who are as far along as I am"); it does
+  not reach `wouldPayFor` because she answered pay "no".
+- The "nothing" four are the principled sceptic (Dirk), the worried non-user (Harm), the
+  sceptical routine user (Pieter) and the matter-of-fact non-user (Ilse). The read should land on
+  peer-led, network-specific formats, not generic training.
+
+**Questionnaire vs evidence (self-report gaps).** `practice.domains` stay evidence-gated, so
+ticked areas without an episode show in `stats.questionnaire.claimedNoEpisode`:
+- Claimed without an episode (6 members, 7 ticks): Joris building, Marieke learning, Sanne
+  analysis + client, Tjeerd writing, Esther thinking, Wouter admin. Result: claimedNoEpisode is
+  1 in every domain except prep (0).
+- Ticked fewer areas than they evidenced (modest): Fatima ticks writing, analysis only (evidence
+  in 5 areas); Lotte ticks prep only (evidence in 3); Pieter leaves analysis unticked.
+- Frequency tracks level loosely: never = the three level-0 members; tried = Bram, Tjeerd,
+  Wouter (level 1); Sanne (level 1) says monthly, an overclaim matching her confident-starter
+  profile; Joris (level 2) says daily; Kwame (level 3) says weekly. Totals: never 3, tried 3,
+  monthly 1, weekly 4, daily 5.
+- canShow: yes for every level 3 to 4 member with offers (Anneke, Marieke, Fatima, Noor, Kwame);
+  maybe for Joris, Sanne, Esther; no for Pieter and Lotte (Lotte: "I have not shown anyone
+  since"); skipped for never/tried.
+- Questionnaire tools use the fixed keys ("Transcription tool" for Otter/Teams), so
+  `selfReport.tools` and `practice.tools` differ slightly in wording by design.
 
 **Tools.** Copilot (Joris, Marieke, Sanne, Kwame; "the tool the municipality/hospital allows"),
 ChatGPT (most), Claude (Anneke, Marieke, Noor), NotebookLM (Marieke, Esther, Kwame), Perplexity
@@ -94,6 +118,8 @@ empty `wouldPayFor` with a non-empty quote; Anneke's mean is exactly 70 (band `m
 
 ## Schema points found ambiguous
 
+- Stats `pay.no` counts "nothing for now" members as no (see above); if the organiser view
+  shows the pay split it may want to separate "no" from "nothing".
 - `transcript` is documented as "live/imported only; seed may omit"; the seed includes
   `transcript: []` as instructed. `endedEarly` is set by assembleProfile but not listed in the
   Profile block of architecture.md; included on every seed profile.
@@ -104,7 +130,4 @@ empty `wouldPayFor` with a non-empty quote; Anneke's mean is exactly 70 (band `m
   people into domains unintentionally. The seed's wants were reworded to avoid most of this
   (e.g. "find out" instead of "learn"), which live profiles will not do. A level-2 member with
   strong evidence (Joris on admin) never appears as a helper because helpers need level >= 3.
-- The practice-level tasks in `confidence.items` carry a `level`; the engine does not use it
-  for scoring (mean only), so the per-item slope is visible only if the UI plots it.
-- File size: 71 KB against the "~60 KB" target. The JSON content alone is 66 KB; reaching 60 KB
-  would mean cutting feedback below the 2 to 3 sentence spec.
+- File size: 77 KB after the questionnaire fields (target was ~60 KB).

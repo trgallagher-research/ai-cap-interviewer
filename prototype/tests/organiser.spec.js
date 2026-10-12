@@ -25,6 +25,15 @@ function profile(o) {
     feedback: { headline: "Thanks " + o.name + ", here is what stood out", summary: "You described your work clearly.", strengths: ["Clear judgement about when not to use AI."], nextSteps: [{ title: "Try one small experiment", detail: "On your own notes, this week." }], closing: "Good luck." },
     quotes: o.quotes || [],
   };
+  if (o.q) {
+    const a = Object.assign({ uses: [], tools: [], toolsOther: "", offer: [], offerOther: "", pay: "", canShow: "" }, o.q);
+    base.questionnaire = a;
+    base.practice.stance = a.stance;
+    base.selfReport = { frequency: a.frequency, domains: a.frequency === "never" ? [] : a.uses.slice(), tools: a.frequency === "never" ? [] : a.tools.slice(), canShow: a.canShow || "" };
+    const keys = a.offer.filter((k) => k !== "nothing");
+    const pay = a.pay || (a.offer.includes("nothing") ? "no" : "");
+    base.productSignals = { wouldPayFor: (pay === "yes" || pay === "maybe") ? keys.join("; ") : "", offerKeys: keys, pay, quote: o.quote || "" };
+  } else { base.questionnaire = null; base.selfReport = null; }
   if (o.transcript) base.transcript = o.transcript;
   if (o.endedEarly) base.endedEarly = true;
   return base;
@@ -35,27 +44,33 @@ const SEED = [
     domains: [{ key: "thinking", evidence: "I talk a case through before I go in." }, { key: "prep", evidence: "I ask it for three workshop openings and pick one." }, { key: "writing", evidence: "Drafts proposals from my intake notes." }],
     tools: ["Claude", "ChatGPT"], items: [{ id: "r1", task: "Draft a proposal from intake notes", level: 2, rating: 85 }, { id: "r2", task: "Use AI as a sparring partner on a stuck team case", level: 3, rating: 70 }, { id: "r3", task: "Build a reusable prompt for workshop design", level: 4, rating: 66 }],
     wants: ["learn to build reusable prompts for workshop design"], offers: ["can show how I use it to prepare workshop designs"], pay: "a half-day with peers on real cases", quote: "I would pay for a half-day with peers on real cases.", quotes: ["I talk a case through before I go in."],
+    q: { frequency: "daily", uses: ["thinking", "prep", "writing", "analysis"], tools: ["Claude", "ChatGPT"], stance: "pragmatic", offer: ["peer-halfday", "prompt-library"], offerOther: "a supervision group on AI and ethics", pay: "yes", canShow: "yes" },
     transcript: [{ role: "interviewer", text: "Hello Anneke, what does a typical week look like?" }, { role: "member", text: "Mostly team sessions and a lot of preparation." }] }),
   profile({ id: "p_b", name: "Bram", role: "mediator", level: 1, mean: 78, kind: "confident-starter", stance: "enthusiast",
     summary: "Has tried ChatGPT a few times for quick summaries.", domains: [{ key: "writing", evidence: "Summarised a long email thread once." }],
     tools: ["ChatGPT"], items: [{ id: "r1", task: "Summarise a document", level: 1, rating: 90 }, { id: "r2", task: "Draft a mediation agreement", level: 2, rating: 66 }],
-    wants: ["use AI to analyse interview notes"], offers: [], pay: "", quotes: ["It feels like magic, honestly."] }),
+    wants: ["use AI to analyse interview notes"], offers: [], pay: "", quotes: ["It feels like magic, honestly."],
+    q: { frequency: "tried", uses: ["writing", "client"], tools: ["ChatGPT"], stance: "enthusiast", offer: ["confidentiality", "peer-halfday"], pay: "maybe" } }),
   profile({ id: "p_c", name: "Carla", role: "organisational adviser", level: 3, mean: 40, kind: "cautious-practitioner", stance: "cautious",
     summary: "Integrated AI into analysis of survey results and documents, but doubts herself.", domains: [{ key: "analysis", evidence: "I feed it anonymised survey comments and ask for patterns." }, { key: "learning", evidence: "I read up on new methods with it." }],
     tools: ["Copilot"], items: [{ id: "r1", task: "Find patterns in survey comments", level: 3, rating: 45 }, { id: "r2", task: "Translate a report", level: 1, rating: 35 }],
-    wants: ["get more confident with client material"], offers: ["can show my survey-analysis routine"], pay: "a checklist for client confidentiality", quotes: ["I never put a client name in."] }),
+    wants: ["get more confident with client material"], offers: ["can show my survey-analysis routine"], pay: "a checklist for client confidentiality", quotes: ["I never put a client name in."],
+    q: { frequency: "weekly", uses: ["analysis", "learning"], tools: ["Microsoft Copilot"], stance: "cautious", offer: ["confidentiality"], pay: "maybe", canShow: "maybe" } }),
   profile({ id: "p_d", name: "Dirk", role: "trainer", level: 0, mean: 18, kind: "aligned", stance: "sceptical",
     summary: "Has not used AI tools in his work and doubts the value for relational work.", domains: [], tools: [],
     items: [{ id: "r1", task: "Open a free AI chat tool and ask it to summarise a one-page document", level: 1, rating: 25 }, { id: "r2", task: "Ask it for three icebreakers for a training", level: 1, rating: 11 }],
-    wants: [], offers: [], pay: "", quotes: ["I do not see what it adds to being in the room."] }),
+    wants: [], offers: [], pay: "", quotes: ["I do not see what it adds to being in the room."],
+    q: { frequency: "never", stance: "sceptical", offer: ["nothing"] } }),
   profile({ id: "p_e", name: "Els", role: "manager", level: 4, mean: 88, kind: "aligned", stance: "enthusiast",
     summary: "Builds custom GPTs for her team and sets data rules.", domains: [{ key: "building", evidence: "Built a project GPT for our intake process." }, { key: "client", evidence: "Ran a session with a team using it live." }, { key: "writing", evidence: "All first drafts." }, { key: "thinking", evidence: "Sparring partner on hard conversations." }],
     tools: ["ChatGPT", "Claude"], items: [{ id: "r1", task: "Build a project for a recurring task", level: 4, rating: 92 }, { id: "r2", task: "Teach a colleague a prompt routine", level: 4, rating: 84 }],
-    wants: ["learn where the limits of client-facing use are"], offers: ["can show how to build a project GPT"], pay: "a peer group that meets monthly", quote: "A peer group, monthly, that I would pay for.", quotes: ["Rules first, then tools."] }),
+    wants: ["learn where the limits of client-facing use are"], offers: ["can show how to build a project GPT"], pay: "a peer group that meets monthly", quote: "A peer group, monthly, that I would pay for.", quotes: ["Rules first, then tools."],
+    q: { frequency: "daily", uses: ["building", "client", "writing", "thinking", "admin"], tools: ["ChatGPT", "Claude"], stance: "enthusiast", offer: ["peer-halfday", "one-to-one"], pay: "yes", canShow: "yes" } }),
   profile({ id: "p_f", name: "Femke", role: "conflict coach", level: 2, mean: 55, kind: "aligned", stance: "pragmatic",
     summary: "Regular use for session preparation and admin.", domains: [{ key: "prep", evidence: "Prepares session outlines every time." }, { key: "admin", evidence: "Invoices and planning." }],
     tools: ["ChatGPT"], items: [{ id: "r1", task: "Prepare a session outline", level: 2, rating: 70 }, { id: "r2", task: "Analyse a set of interview notes", level: 3, rating: 40 }],
-    wants: ["prepare a workshop faster with AI"], offers: [], pay: "", quotes: ["It saves me an evening a week."], endedEarly: true }),
+    wants: ["prepare a workshop faster with AI"], offers: [], pay: "", quotes: ["It saves me an evening a week."], endedEarly: true,
+    q: { frequency: "weekly", uses: ["prep", "admin"], tools: ["ChatGPT"], stance: "pragmatic", offer: ["demos", "peer-halfday"], pay: "no", canShow: "no" } }),
   profile({ id: "p_g", name: "Gijs", role: "adviser", level: 2, mean: null, kind: "unrated", stance: "worried",
     summary: "Uses it routinely for writing but worries about data.", domains: [{ key: "writing", evidence: "Emails and reports." }],
     tools: ["Copilot"], items: [], wants: ["keep meeting notes with AI without leaking data"], offers: [], pay: "", quotes: ["Where does the text go?"] }),
@@ -166,7 +181,30 @@ function check(name, ok, extra) { if (ok) { passes++; console.log("  ok   " + na
   check("help map lists a helper", (await page.$$("#og-help .helpers li")).length >= 1);
   check("help map lists a seeker", (await page.$$("#og-help .seekers li")).length >= 1);
   check("help map says nobody for a seeker-only domain", (await page.textContent("#og-help")).includes("Nobody in the network yet"));
-  check("wants/offers/pay lists", (await page.$$("#og-signals .wants ul.full li")).length >= 3 && (await page.$$("#og-signals .offers ul.full li")).length >= 2 && (await page.$$("#og-signals .pay ul.full li")).length >= 2);
+  check("wants/offers lists", (await page.$$("#og-signals .wants ul.full li")).length >= 3 && (await page.$$("#og-signals .offers ul.full li")).length >= 2);
+  const qstats = await page.evaluate(() => Engine.stats(SEED).questionnaire);
+  const tally = await page.$$eval("#og-signals .pay .og-payrow", (rows) => rows.map((r) => ({ key: r.dataset.offer, total: +r.dataset.total, segs: Object.fromEntries([...r.querySelectorAll(".seg")].map((x) => [x.dataset.pay, +x.dataset.n])) })));
+  check("pay tally: one bar per offer option except nothing", tally.length === 5 && !tally.some((r) => r.key === "nothing"));
+  check("pay tally totals equal stats.questionnaire.offer", tally.every((r) => r.total === qstats.offer[r.key]), JSON.stringify({ tally, offer: qstats.offer }));
+  check("pay tally segments sum to totals", tally.every((r) => Object.values(r.segs).reduce((a, b) => a + b, 0) === r.total));
+  check("peer-halfday split yes 2 / maybe 1 / no 1", JSON.stringify(tally.find((r) => r.key === "peer-halfday").segs) === JSON.stringify({ yes: 2, maybe: 1, no: 1 }), JSON.stringify(tally.find((r) => r.key === "peer-halfday")));
+  check("pay caption says who said nothing", (await page.textContent("#og-signals .pay")).includes("1 member said nothing for now"));
+  check("pay: older profile noted as not counted", (await page.textContent("#og-signals .pay")).includes("answered before the quick questions"));
+  check("pay: in their words shows quote and offerOther", (await page.textContent("#og-signals .pay .words")).includes("supervision group"));
+  await page.hover("#og-signals .pay .og-payrow[data-offer='peer-halfday'] .seg.yes");
+  check("pay segment tooltip names members", /Anneke|Els/.test(await page.textContent("#og-signals .pay .og-tip")));
+  // three heatmap states
+  const claimCells = await page.$$eval("#og-heat tbody .hm.claim", (n) => n.map((x) => x.dataset.domain));
+  const expectClaims = Object.values(qstats.claimedNoEpisode).reduce((a, b) => a + b, 0);
+  check("heatmap: claimed-no-example cells = sum of claimedNoEpisode (" + expectClaims + ")", claimCells.length === expectClaims && expectClaims >= 3, JSON.stringify(claimCells));
+  check("heatmap: filled cells = evidence count", (await page.$$("#og-heat tbody .hm.has")).length === SEED.reduce((a, p) => a + p.practice.domains.length, 0));
+  const claimRow = await page.$$eval("#og-heat tfoot tr.claimrow td", (n) => n.map((x) => +x.textContent));
+  check("heatmap footer 'ticked, no example' matches stats", JSON.stringify(claimRow) === JSON.stringify(await page.evaluate(() => Prompts.DOMAINS.map((d) => Engine.stats(SEED).questionnaire.claimedNoEpisode[d.key]))));
+  await page.hover("#og-heat .hm.claim");
+  check("claimed cell tooltip text", (await page.textContent("#og-heat .og-tip")).includes("Ticked this in the quick questions, but gave no example"));
+  // frequency strip
+  const fsegs = await page.$$eval("#og-freq .og-freqbar .seg", (n) => n.length);
+  check("frequency strip renders with a segment per non-zero answer", fsegs === Object.values(qstats.frequency).filter((v) => v > 0).length && (await page.textContent("#og-freq")).includes("How often members said they use it"));
   check("wants theme tally present", (await page.$$("#og-signals .wants ul.tally li")).length >= 2);
   check("scatter labels every mark with a name", (await page.$$("#og-scatter text.lbl")).length === withMean);
   check("scatter draws a per-member expected tick per rated mark, no band", (await page.$$("#og-scatter .ticks .tickline")).length === withMean && (await page.$("#og-scatter .band")) === null);
@@ -189,10 +227,16 @@ function check(name, ok, extra) { if (ok) { passes++; console.log("  ok   " + na
   check("detail panel opens with member name", drawerText.includes("Anneke"));
   check("detail shows confidence bars", (await page.$$("#og-drawer .og-bar")).length === 3);
   check("detail shows transcript collapsed", (await page.$("#og-drawer details")) !== null);
+  check("drawer shows Quick questions in plain words", drawerText.includes("Quick questions") && drawerText.includes("Most days") && drawerText.includes("A half-day with peers from this network"));
+  check("drawer marks ticked-but-no-example domain", (await page.$("#og-drawer .dom.claim[data-claim='analysis']")) !== null);
   check("detail shows residual in words", /rated \d+ points? (above|below) what their tasks would predict|rated exactly/.test(drawerText));
   await page.screenshot({ path: path.join(SHOTS, "desktop-light-detail.png") });
   await page.keyboard.press("Escape");
   check("Escape closes panel", (await page.$("#og-drawer")) === null);
+  await page.click("#og-members .og-member[data-id='p_g']");
+  await page.waitForSelector("#og-drawer");
+  check("drawer for profile without questionnaire renders", (await page.textContent("#og-drawer")).includes("Answered before the quick questions were added"));
+  await page.keyboard.press("Escape");
   // heatmap cell tooltip
   await page.hover("#og-heat .hm.has");
   check("heatmap tooltip shows evidence", (await page.textContent("#og-heat .og-tip")) !== "" && (await page.$eval("#og-heat .og-tip", (n) => n.classList.contains("show"))));
@@ -317,7 +361,14 @@ function check(name, ok, extra) { if (ok) { passes++; console.log("  ok   " + na
       const ov = await pg.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
       check("real: no horizontal overflow (" + tag + ")", ov.sw <= ov.cw, JSON.stringify(ov));
       if (vp.width > 600) {
-        check("real: pay list merges duplicates with a count (" + tag + ")", /\u00B7 [2-9] \u00B7/.test(await pg.textContent("#og-signals .pay")));
+        const answered = await pg.evaluate(() => Engine.stats(window.SEED).questionnaire.answered);
+        if (answered) {
+          const ok = await pg.evaluate(() => { const q = Engine.stats(window.SEED).questionnaire; return [...document.querySelectorAll("#og-signals .pay .og-payrow")].every((r) => +r.dataset.total === q.offer[r.dataset.offer]); });
+          check("real: pay tally equals stats.questionnaire.offer (" + tag + ")", ok);
+          check("real: frequency strip present (" + tag + ")", (await pg.$("#og-freq")) !== null);
+        } else {
+          check("real: seed has no questionnaire yet, pay list falls back to grouped text (" + tag + ")", /\u00B7 [2-9] \u00B7/.test(await pg.textContent("#og-signals .pay")));
+        }
         check("real: wants list collapsed with Show all (" + tag + ")", (await pg.$$("#og-signals .wants ul.full li")).length === 8 && (await pg.$("#og-signals .wants button")) !== null);
         await pg.click("#og-signals .wants button");
         check("real: Show all expands (" + tag + ")", (await pg.$$("#og-signals .wants ul.full li")).length > 8);

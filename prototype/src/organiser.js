@@ -77,6 +77,15 @@
   function meanOf(p) { const m = p.confidence && p.confidence.mean; return Number.isFinite(m) ? m : null; }
   function kindOf(p) { const k = (p.divergence && p.divergence.kind) || "aligned"; return (meanOf(p) === null) ? "unrated" : k; }
   function isSample(p) { return p.source === "seed"; }
+  /** Domains the member ticked in the quick questions but gave no episode for. */
+  function claimedOnly(p) {
+    const sr = p.selfReport; if (!sr || !Array.isArray(sr.domains)) return [];
+    const ev = new Set((p.practice.domains || []).map((d) => d.key));
+    return sr.domains.filter((k) => !ev.has(k));
+  }
+  function payOf(p) { const ps = p.productSignals || {}; return ps.pay || (p.questionnaire && p.questionnaire.pay) || ""; }
+  function optLabel(qid, key) { return (P().optionLabel ? P().optionLabel(qid, key) : key); }
+  const FREQ_SHORT = { never: "Never", tried: "Tried", monthly: "Monthly", weekly: "Weekly", daily: "Daily" };
 
   // ---------------------------------------------------------------------------
   // Styles (scoped under .og-root / .nw-root; tokens only, plus the validated ladder ramp)
@@ -164,6 +173,30 @@
 .og-heat .hm { display: block; width: 100%; height: 1.6rem; border-radius: 4px; border: 0; background: var(--surface-2); padding: 0; cursor: default; }
 .og-heat .hm.has { cursor: pointer; }
 .og-heat .hm.has:hover, .og-heat .hm.has:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; }
+.og-heat .hm.claim, .og-claimsw { background: repeating-linear-gradient(135deg, transparent 0 4px, var(--line) 4px 6px), var(--surface); box-shadow: inset 0 0 0 1.5px var(--muted); cursor: help; }
+.og-heat .hm.claim:hover, .og-heat .hm.claim:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; }
+.og-heat tfoot tr.claimrow td, .og-heat tfoot tr.claimrow th { color: var(--muted); }
+.og-freq { margin-top: .8rem; }
+.og-freq .title { font-size: .8rem; color: var(--fg-2); margin-bottom: .35rem; }
+.og-freqbar { display: flex; gap: 2px; height: 18px; }
+.og-freqbar .seg { flex: 1 1 0; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: .72rem; font-weight: 600; }
+.og-ramp + .og-caption, .og-ramp + .og-ramp { margin-top: .5rem; }
+.og-paytally { display: grid; gap: .55rem; margin: .4rem 0 .5rem; }
+.og-payrow { display: grid; grid-template-columns: minmax(0, 1fr); gap: .2rem; font-size: .88rem; }
+.og-payrow .lab { display: flex; justify-content: space-between; gap: .5rem; }
+.og-payrow .lab .n { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--fg-2); flex: none; }
+.og-paybar { display: flex; gap: 2px; height: 16px; position: relative; }
+.og-paybar .seg { border-radius: 4px; min-width: 6px; display: flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 600; color: var(--accent-fg); cursor: default; }
+.og-paybar .seg:focus-visible, .og-paybar .seg:hover { outline: 2px solid var(--fg); outline-offset: 1px; }
+.og-paybar .seg.yes, .og-sw.yes { background: var(--warm); }
+.og-paybar .seg.maybe, .og-sw.maybe { background: var(--accent); }
+.og-paybar .seg.no, .og-sw.no { background: var(--muted); }
+.og-list .og-quote { font-size: .88rem; }
+.og-qq { display: grid; grid-template-columns: auto 1fr; gap: .2rem .75rem; margin: 0; font-size: .9rem; }
+.og-qq dt { color: var(--muted); }
+.og-qq dd { margin: 0; }
+.og-drawer .dom.claim b { font-weight: 500; color: var(--fg-2); }
+.og-drawer .dom.claim span { color: var(--muted); font-style: italic; }
 .og-heat .hm:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .og-heat tfoot td, .og-heat tfoot th { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--fg-2); font-size: .8rem; border-bottom: 0; }
 .og-heat tfoot th { font-family: var(--font-body); font-weight: 500; }
@@ -330,6 +363,24 @@
     return wrap;
   }
 
+  /** Compact five-segment strip from the quick questions: how often members said they use AI. */
+  function drawFrequencyStrip(stats) {
+    const q = stats.questionnaire;
+    if (!q || !q.answered) return null;
+    const keys = ["never", "tried", "monthly", "weekly", "daily"];
+    const bar = el("div", { class: "og-freqbar", role: "img", "aria-label": "How often members said they use it: " + keys.map((k) => (q.frequency[k] || 0) + " " + FREQ_SHORT[k]).join(", ") });
+    keys.forEach((k, i) => {
+      const n = q.frequency[k] || 0; if (!n) return;
+      bar.appendChild(el("div", { class: "seg seg-" + i, style: { flexGrow: String(n), background: `var(--og-l${i})` }, title: `${FREQ_SHORT[k]} (${optLabel("frequency", k)}): ${plural(n, "member")}` }, [el("span", { style: { color: i >= 2 ? "var(--og-segtext)" : "var(--og-segtext-light)" } }, n / q.answered >= 0.06 ? String(n) : "")]));
+    });
+    const missing = stats.n - q.answered;
+    return el("div", { class: "og-freq", id: "og-freq" }, [
+      el("div", { class: "title" }, "How often members said they use it" + (missing ? ` (${q.answered} of ${stats.n} answered the quick questions)` : "")),
+      bar,
+      el("div", { class: "og-spreadlegend", "aria-hidden": "true" }, keys.map((k, i) => el("span", null, [el("i", { class: "og-sw", style: { background: `var(--og-l${i})` } }), `${FREQ_SHORT[k]} (${q.frequency[k] || 0})`]))),
+    ]);
+  }
+
   function levelsExplainer() {
     const L = P().LADDER;
     return el("details", { class: "og-levels" }, [
@@ -397,11 +448,13 @@
     const tiles = el("div", { class: "og-stats" }, [
       stat("Members interviewed", n, sampleN ? `${sampleN} of these are fictional samples` : "Real interviews so far"),
       stat("Average confidence", stats.meanConfidence === null ? "n/a" : stats.meanConfidence, "Members rated 0 to 100 how sure they are they can do tasks from their own work. Members rated different tasks, so this is a rough comparison; the tasks' difficulty is taken into account in the marks below.", stats.meanConfidence === null ? "" : "/ 100"),
-      stat("Sceptical or worried", scepticOrWorried, "Members whose overall stance on AI is doubtful or uneasy"),
+      stat("Sceptical or worried", scepticOrWorried, stats.questionnaire && stats.questionnaire.answered ? "Members who said they feel doubtful or uneasy about AI in their work" : "Members whose overall stance on AI is doubtful or uneasy"),
       stat("Confidence out of step", above + below, `${above} rate themselves above what they described doing, ${below} below` + (unrated ? `; ${unrated} gave no ratings` : "")),
     ]);
     const spread = drawSpreadBar(stats);
     spread.appendChild(levelsExplainer());
+    const fq = drawFrequencyStrip(stats);
+    if (fq) spread.appendChild(fq);
     return sectionEl("summary", "The network at a glance", null, el("div", null, [tiles, spread]));
   }
 
@@ -552,6 +605,15 @@
           b.addEventListener("blur", tip.hide);
           b.addEventListener("click", () => openDetail(p));
           td.appendChild(b);
+        } else if (claimedOnly(p).includes(d.key)) {
+          const lines = [p.member.name + ": " + d.label, "Ticked this in the quick questions, but gave no example"];
+          const b = el("button", { type: "button", class: "hm claim", title: `${d.label}: ticked this in the quick questions, but gave no example`, "aria-label": `${p.member.name}, ${d.label}: ticked this in the quick questions, but gave no example`, "data-domain": d.key });
+          b.addEventListener("pointerenter", () => tip.showAt(b, lines));
+          b.addEventListener("pointerleave", tip.hide);
+          b.addEventListener("focus", () => tip.showAt(b, lines));
+          b.addEventListener("blur", tip.hide);
+          b.addEventListener("click", () => openDetail(p));
+          td.appendChild(b);
         } else {
           td.appendChild(el("span", { class: "hm", "aria-label": `${p.member.name}, ${d.label}: no evidence` }));
         }
@@ -564,17 +626,25 @@
     D.forEach((d) => foot.appendChild(el("td", { class: "cell", style: { textAlign: "center" } }, String(stats.byDomain[d.key] || 0))));
     const foot2 = el("tr", null, [el("th", { class: "who", scope: "row" }, "of whom routine or better")]);
     D.forEach((d) => foot2.appendChild(el("td", { class: "cell", style: { textAlign: "center" } }, String(stats.strongByDomain[d.key] || 0))));
-    table.appendChild(el("tfoot", null, [foot, foot2]));
+    const qs = stats.questionnaire;
+    let foot3 = null;
+    if (qs && qs.answered) {
+      foot3 = el("tr", { class: "claimrow" }, [el("th", { class: "who", scope: "row" }, "ticked, no example")]);
+      D.forEach((d) => foot3.appendChild(el("td", { class: "cell", style: { textAlign: "center" } }, String((qs.claimedNoEpisode || {})[d.key] || 0))));
+    }
+    table.appendChild(el("tfoot", null, [foot, foot2, foot3]));
     wrap.appendChild(table);
     const L = P().LADDER;
-    const ramp = el("div", { class: "og-ramp", "aria-hidden": "true" }, [el("span", null, "Cell shade = that member's practice level:")].concat(L.map((l, i) => el("span", null, [el("i", { class: "og-sw", style: { background: `var(--og-l${i})` } }), l.label]))));
+    const ramp = el("div", { class: "og-ramp", "aria-hidden": "true" }, [el("span", null, "Filled cell, shaded by that member's practice level:")].concat(L.map((l, i) => el("span", null, [el("i", { class: "og-sw", style: { background: `var(--og-l${i})` } }), l.label]))));
+    const claimKey = (qs && qs.answered) ? el("div", { class: "og-ramp", "aria-hidden": "true" }, [el("span", null, [el("i", { class: "og-sw og-claimsw" }), "Hatched outline: ticked in the quick questions, but no example given"])]) : null;
     const gapNames = stats.gaps.map((k) => DOMAIN_SHORT[k] || k);
     const caption = el("p", { class: "og-caption" },
-      "A filled cell means the member described using AI for that kind of work; hover or tab to a cell to read what they said. " +
+      "A filled cell means the member described a real example of using AI for that kind of work; hover or tab to a cell to read what they said. " +
+      ((qs && qs.answered) ? "A hatched outline means they ticked it in the quick questions but did not give an example, so it is a claim rather than evidence. " : "") +
       "Columns marked \"gap\" have fewer than two members who use AI routinely or better for that kind of work, so there is little in-house knowledge to draw on there." +
       (gapNames.length ? ` Gaps right now: ${gapNames.join(", ")}.` : " There are no gaps right now."));
     const above = el("p", { class: "og-note", style: { marginBottom: ".5rem" } }, "Columns marked \"gap\" have fewer than two members who use AI routinely or better for that kind of work.");
-    return sectionEl("heat", "Who knows what", "Each row is a member, each column a kind of work. Scroll sideways on a phone.", el("div", null, [above, wrap, ramp, caption]));
+    return sectionEl("heat", "Who knows what", "Each row is a member, each column a kind of work. Scroll sideways on a phone.", el("div", null, [above, wrap, ramp, claimKey, caption]));
   }
 
   function helpSection(profiles, openDetail) {
@@ -665,6 +735,9 @@
       return box;
     };
     const pay = () => {
+      const qs = stats.questionnaire;
+      if (qs && qs.answered) return payTally(profiles, stats, nameOf);
+      // Older results without the quick questions: group the free-text answers.
       const groups = new Map();
       profiles.forEach((p) => {
         const t = p.productSignals && p.productSignals.wouldPayFor; if (!t) return;
@@ -685,6 +758,58 @@
     ]);
     const product = productCard(profiles, stats);
     return sectionEl("signals", "Wants, offers and what they would pay for", "The raw material for deciding whether there is something to offer, and to whom.", el("div", null, [cols, product]));
+  }
+
+  /** "Would pay for" from the fixed quick-question options: one bar per option, split by the pay answer. */
+  function payTally(profiles, stats, nameOf) {
+    const qs = stats.questionnaire;
+    const opts = P().QUESTIONNAIRE.offer.options.filter((o) => o.key !== "nothing");
+    const box = el("div", { class: "og-list pay" }, [el("h3", null, "Would pay for"), el("div", { class: "sub" }, "What members ticked as worth their time in the quick questions, split by whether they would pay for it")]);
+    const wrap = el("div", { style: { position: "relative" } });
+    const tip = makeTip(wrap);
+    const max = Math.max(1, ...opts.map((o) => qs.offer[o.key] || 0));
+    const tally = el("div", { class: "og-paytally" });
+    const PAY = [["yes", "would pay"], ["maybe", "maybe"], ["no", "no or not answered"]];
+    opts.forEach((o) => {
+      const members = profiles.filter((p) => p.questionnaire && Array.isArray(p.questionnaire.offer) && p.questionnaire.offer.includes(o.key));
+      const total = qs.offer[o.key] || 0;
+      const split = { yes: [], maybe: [], no: [] };
+      members.forEach((p) => { const v = payOf(p); (v === "yes" ? split.yes : v === "maybe" ? split.maybe : split.no).push(p); });
+      const bar = el("div", { class: "og-paybar", style: { width: (total / max * 100) + "%" } });
+      PAY.forEach(([k, word]) => {
+        const list = split[k]; if (!list.length) return;
+        const names = list.map(nameOf).join(", ");
+        const lines = [`${list.length} ${word}`, o.label, names];
+        const seg = el("span", { class: "seg " + k, tabindex: "0", role: "img", "data-pay": k, "data-n": String(list.length), style: { flexGrow: String(list.length) }, title: `${list.length} ${word}: ${names}`, "aria-label": `${o.label}: ${list.length} ${word} (${names})` }, list.length / max >= 0.12 ? String(list.length) : "");
+        seg.addEventListener("pointerenter", () => tip.showAt(seg, lines));
+        seg.addEventListener("pointerleave", tip.hide);
+        seg.addEventListener("focus", () => tip.showAt(seg, lines));
+        seg.addEventListener("blur", tip.hide);
+        bar.appendChild(seg);
+      });
+      tally.appendChild(el("div", { class: "og-payrow", "data-offer": o.key, "data-total": String(total) }, [
+        el("div", { class: "lab" }, [el("span", null, o.label), el("span", { class: "n" }, String(total))]),
+        total ? bar : el("div", { class: "og-paybar" }),
+      ]));
+    });
+    wrap.appendChild(tally);
+    box.appendChild(wrap);
+    box.appendChild(el("div", { class: "og-ramp", "aria-hidden": "true", style: { marginTop: "0" } }, PAY.map(([k, word]) => el("span", null, [el("i", { class: "og-sw " + k }), word === "would pay" ? "Would pay" : word === "maybe" ? "Maybe" : "No or not answered"]))));
+    const nothing = qs.offer.nothing || 0;
+    const missing = stats.n - qs.answered;
+    box.appendChild(el("p", { class: "og-caption" }, `${plural(nothing, "member")} said nothing for now.` + (missing ? ` ${plural(missing, "member")} answered before the quick questions existed and ${missing === 1 ? "is" : "are"} not counted here.` : "") + " Hover or tab to a segment to see who."));
+    const words = [];
+    profiles.forEach((p) => {
+      const ps = p.productSignals || {};
+      if (ps.quote && String(ps.quote).trim()) words.push({ t: "\u201C" + String(ps.quote).trim() + "\u201D", p });
+      const other = p.questionnaire && p.questionnaire.offerOther;
+      if (other && String(other).trim()) words.push({ t: "Also suggested: " + String(other).trim(), p });
+    });
+    if (words.length) {
+      box.appendChild(el("div", { class: "eyebrow", style: { marginTop: ".6rem" } }, "In their words"));
+      box.appendChild(el("ul", { class: "words" }, words.map((w) => el("li", null, [w.t, " ", el("small", null, nameOf(w.p))]))));
+    }
+    return box;
   }
 
   function productCard(profiles, stats) {
@@ -849,14 +974,18 @@
         closeBtn,
       ]),
       el("div", { class: "pills" }, [levelPill(lv), el("span", { class: "pill" }, "stance: " + (STANCE_LABEL[p.practice.stance] || p.practice.stance)), kindPill(kindOf(p)), p.endedEarly ? el("span", { class: "pill warn" }, "interview stopped early") : null, el("span", { class: "pill" }, "source: " + (p.source || "unknown"))]),
+      quickQuestions(p),
       sec("Practice", [
         el("p", null, p.practice.summary || "No summary."),
         el("p", { class: "og-caption" }, `${levelLabel(lv)} (level ${lv}): ${(P().LADDER[lv] || {}).short || ""}`),
       ]),
-      sec("Where they use AI", (p.practice.domains || []).length ? (p.practice.domains || []).map((d) => {
+      sec("Where they use AI", ((p.practice.domains || []).length || claimedOnly(p).length) ? (p.practice.domains || []).map((d) => {
         const dom = D.find((x) => x.key === d.key);
         return el("div", { class: "dom" }, [el("b", null, dom ? dom.label : d.key), el("span", null, d.evidence || "")]);
-      }) : [el("p", { class: "og-caption" }, "No kinds of work with evidence.")]),
+      }).concat(claimedOnly(p).map((k) => {
+        const dom = D.find((x) => x.key === k);
+        return el("div", { class: "dom claim", "data-claim": k }, [el("b", null, dom ? dom.label : k), el("span", null, "Ticked in the quick questions, but gave no example")]);
+      })) : [el("p", { class: "og-caption" }, "No kinds of work with evidence.")]),
       sec("Tools and judgement", [
         el("p", null, (p.practice.tools || []).length ? "Tools: " + p.practice.tools.join(", ") : "No tools named."),
         el("p", null, p.practice.judgement || "No judgement recorded."),
@@ -890,6 +1019,25 @@
     drawer.addEventListener("keydown", (ev) => { if (ev.key === "Escape") closeDetail(); });
     closeBtn.focus();
   }
+  /** The member's quick-question answers in plain words. */
+  function quickQuestions(p) {
+    const a = p.questionnaire;
+    const head = el("h3", null, "Quick questions");
+    if (!a) return el("section", { class: "og-qqsec" }, [head, el("p", { class: "og-caption" }, "Answered before the quick questions were added.")]);
+    const skipped = (qid) => (P().questionSkipped ? P().questionSkipped(qid, a) : false);
+    const rows = [];
+    const add = (label, val) => { if (val) { rows.push(el("dt", null, label)); rows.push(el("dd", null, val)); } };
+    const list = (qid, other) => { const v = Array.isArray(a[qid]) ? a[qid].map((k) => optLabel(qid, k)) : []; if (other) v.push(other); return v.join("; "); };
+    add("How often", a.frequency ? optLabel("frequency", a.frequency) : "");
+    if (!skipped("uses")) add("Used it for", list("uses") || "nothing ticked");
+    if (!skipped("tools")) add("Tools", list("tools", a.toolsOther) || "none ticked");
+    add("How they feel", a.stance ? optLabel("stance", a.stance) : "");
+    add("Worth their time", list("offer", a.offerOther) || "nothing ticked");
+    if (!skipped("pay")) add("Would pay", a.pay ? optLabel("pay", a.pay) : "not answered");
+    if (!skipped("canShow")) add("Could show a colleague", a.canShow ? optLabel("canShow", a.canShow) : "not answered");
+    return el("section", { class: "og-qqsec" }, [head, el("dl", { class: "og-qq" }, rows), el("p", { class: "og-caption" }, "Their own answers before the interview. Practice levels and the map come from the examples they gave, not from these ticks.")]);
+  }
+
   function confidenceBars(p, mean) {
     const items = p.confidence.items || [];
     const out = [];
