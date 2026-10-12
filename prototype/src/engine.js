@@ -1,0 +1,386 @@
+/* engine.js — LLM adapter, interview state machine, marker parsing, scoring and stats.
+ *
+ * LIFT-OUT TARGET. No DOM access. Depends only on window.Prompts.
+ * Lineage: safeVisible/parse-marker logic and the quick-exit (endNow) pattern follow
+ * aligned-interviewer's app/api/interview/turn/route.ts.
+ */
+(function () {
+  "use strict";
+  const P = window.Prompts;
+  const M = P.MARK;
+
+  // ---------------------------------------------------------------------------
+  // LLM adapter
+  // ---------------------------------------------------------------------------
+  const llm = {
+    _sample: undefined, // undefined = not resolved yet; null = unavailable
+    _mode: "none",      // "sample" | "legacy" | "mock" | "none"
+
+    /** Resolve the best available way to reach Claude. Safe to call repeatedly. */
+    async init() {
+      if (this._sample !== undefined) return this._mode;
+      if (typeof window.__mockSample === "function") {
+        this._sample = window.__mockSample; this._mode = "mock"; return this._mode;
+      }
+      try {
+        if (window.claude && typeof window.claude.use === "function") {
+          const s = await window.claude.use("sample");
+          if (s) { this._sample = s; this._mode = "sample"; return this._mode; }
+        }
+      } catch (_) { /* fall through */ }
+      if (window.claude && typeof window.claude.complete === "function") {
+        this._sample = null; this._mode = "legacy"; return this._mode;
+      }
+      this._sample = null; this._mode = "none"; return this._mode;
+    },
+
+    get mode() { return this._mode; },
+    get available() { return this._mode !== "none"; },
+
+    /** messages: [{role, content}] ending on a user turn. opts: {onText, tier, cache} */
+    async chat(messages, opts) {
+      opts = opts || {};
+      await this.init();
+      if (this._mode === "sample" || this._mode === "mock") {
+        const res = await this._sample(messages, {
+          onText: opts.onText ? ({ text }) => opts.onText(text) : undefined,
+          modelTier: opts.tier || "default",
+          cache: opts.cache === undefined ? false : opts.cache,
+        });
+        return { text: (res && typeof res.text === "string") ? res.text : String(res || "") };
+      }
+      if (this._mode === "legacy") {
+        // Legacy in-chat API takes one prompt string: flatten the conversation.
+        const prompt = messages.map((m) => (m.role === "assistant" ? "Assistant: " : "User: ") + m.content).join("\n\n") + "\n\nAssistant:";
+        const text = await window.claude.complete(prompt);
+        if (opts.onText) opts.onText(text);
+        return { text };
+      }
+      const err = new Error("Claude is not available in this view"); err.code = "unavailable"; throw err;
+    },
+
+    /** Ask for JSON; strips fences; one retry with a nudge if parsing fails. */
+    async json(messages, opts) {
+      opts = opts || {};
+      const first = await this.chat(messages, { tier: opts.tier || "complex" });
+      const parsed = tryParseJson(first.text);
+      if (parsed !== undefined) return parsed;
+      const retry = messages.concat([
+        { role: "assistant", content: first.text },
+        { role: "user", content: "That was not valid JSON. Return ONLY the JSON object, no prose, no code fences." },
+      ]);
+      const second = await this.chat(retry, { tier: opts.tier || "complex" });
+      const again = tryParseJson(second.text);
+      if (again !== undefined) return again;
+      const err = new Error("Claude did not return valid JSON"); err.code = "bad_json"; err.text = second.text; throw err;
+    },
+  };
+
+  function tryParseJson(text) {
+    if (typeof text !== "string") return undefined;
+    let t = text.trim();
+    const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fence) t = fence[1].trim();
+    const start = t.indexOf("{"); const end = t.lastIndexOf("}");
+    if (start === -1 || end === -1) return undefined;
+    try { return JSON.parse(t.slice(start, end + 1)); } catch (_) { return undefined; }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Marker parsing
+  // ---------------------------------------------------------------------------
+
+  /** Text safe to show while streaming: everything before the first "<<" (and no dangling "<"). */
+  function safeVisible(full) {
+    const idx = full.indexOf("<<");
+    if (idx !== -1) return full.slice(0, idx);
+    return full.endsWith("<") ? full.slice(0, -1) : full;
+  }
+
+  function parsePhase(full) {
+    const i = full.indexOf(M.PHASE_OPEN);
+    if (i === -1) return null;
+    const j = full.indexOf(M.CLOSE, i + M.PHASE_OPEN.length);
+    if (j === -1) return null;
+    const v = full.slice(i + M.PHASE_OPEN.length, j).trim().toLowerCase();
+    return P.PHASES.includes(v) ? v : null;
+  }
+
+  /** Returns a validated array of rating items, or null when absent/invalid. */
+  function parseRate(full) {
+    const i = full.indexOf(M.RATE_OPEN);
+    if (i === -1) return null;
+    const j = full.indexOf(M.CLOSE, i + M.RATE_OPEN.length);
+    if (j === -1) return null;
+    let raw = full.slice(i + M.RATE_OPEN.length, j).trim();
+    const a = raw.indexOf("["); const b = raw.lastIndexOf("]");
+    if (a === -1 || b === -1) return null;
+    let arr;
+    try { arr = JSON.parse(raw.slice(a, b + 1)); } catch (_) { return null; }
+    if (!Array.isArray(arr)) return null;
+    const items = arr
+      .filter((x) => x && typeof x.task === "string" && x.task.trim())
+      .map((x, k) => ({
+        id: String(x.id || ("r" + (k + 1))),
+        task: x.task.trim(),
+        level: clampInt(x.level, 1, 4, 2),
+      }));
+    if (items.length < 2 || items.length > 6) return null;
+    // ids must be unique
+    const seen = new Set();
+    for (const it of items) { if (seen.has(it.id)) it.id = it.id + "_" + Math.random().toString(36).slice(2, 5); seen.add(it.id); }
+    return items;
+  }
+
+  function clampInt(v, lo, hi, dflt) {
+    const n = Math.round(Number(v));
+    if (!Number.isFinite(n)) return dflt;
+    return Math.min(hi, Math.max(lo, n));
+  }
+
+  function parseTurn(full) {
+    return {
+      visible: full.split("<<")[0].trim(),
+      phase: parsePhase(full),
+      rateItems: parseRate(full),
+      complete: full.includes(M.COMPLETE),
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Interview state machine
+  // ---------------------------------------------------------------------------
+  const LIMITS = { maxQuestionsBeforeRate: 14, minQuestionsBeforeRate: 6, maxAfterRate: 2 };
+
+  /** Interview holds the transcript and drives one turn at a time. UI-agnostic. */
+  class Interview {
+    constructor(member) {
+      this.member = { name: (member.name || "").trim(), role: (member.role || "").trim() };
+      this.turns = [];            // {role:"interviewer"|"member", text}
+      this.phase = "orient";
+      this.rateItems = null;      // proposed self-efficacy items
+      this.ratings = null;        // {id: 0..100}
+      this.status = "in_progress"; // in_progress | rating | complete | ended_early
+      this.interviewerCount = 0;
+      this.afterRateCount = 0;
+      this.rateRetries = 0;
+      this.startedAt = new Date().toISOString();
+    }
+
+    /** Add the member's answer (text). */
+    answer(text) {
+      const t = (text || "").trim();
+      if (!t) return;
+      this.turns.push({ role: "member", text: t });
+    }
+
+    /** Record slider ratings and add them to the transcript as a member turn. */
+    submitRatings(ratings) {
+      this.ratings = {};
+      for (const it of this.rateItems || []) {
+        const v = ratings[it.id];
+        if (typeof v === "number" && Number.isFinite(v)) this.ratings[it.id] = clampInt(v, 0, 100, 50);
+      }
+      this.turns.push({ role: "member", text: P.formatRatingsTurn(this.rateItems, this.ratings) });
+      this.status = "in_progress";
+      this.phase = "close";
+    }
+
+    /** Decide any page-side steering before the next interviewer turn. */
+    _nudge() {
+      if (this.ratings) {
+        return this.afterRateCount >= LIMITS.maxAfterRate ? P.NUDGES.forceClose : "";
+      }
+      if (this.rateItems) return ""; // waiting on the member's ratings; shouldn't be called
+      if (this.interviewerCount >= LIMITS.maxQuestionsBeforeRate) return P.NUDGES.forceRate;
+      return "";
+    }
+
+    /**
+     * Run one interviewer turn. onText(visibleSoFar) streams the safe prefix.
+     * Resolves {visible, phase, rateItems, complete}.
+     */
+    async next(onText, opts) {
+      opts = opts || {};
+      const endNow = !!opts.endNow;
+      let nudge = endNow ? "" : this._nudge();
+      if (opts.nudge) nudge = opts.nudge;
+      const messages = P.interviewMessages(this.member, this.turns, { endNow, nudge });
+      let full = "";
+      const res = await llm.chat(messages, {
+        tier: "default",
+        cache: false,
+        onText: (text) => { full = text; if (onText) onText(safeVisible(text)); },
+      });
+      full = res.text || full;
+      let parsed = parseTurn(full);
+
+      // If the model said it was going to the rate phase but gave no valid items, ask once more.
+      if (!endNow && !this.ratings && parsed.phase === "rate" && !parsed.rateItems && this.rateRetries < 1) {
+        this.rateRetries++;
+        this.turns.push({ role: "interviewer", text: parsed.visible });
+        const retryMsgs = P.interviewMessages(this.member, this.turns, { nudge: P.NUDGES.missingRate });
+        this.turns.pop();
+        const r2 = await llm.chat(retryMsgs, { tier: "default", cache: false, onText: (t) => { if (onText) onText(safeVisible(t)); } });
+        const p2 = parseTurn(r2.text || "");
+        if (p2.rateItems) parsed = p2;
+      }
+
+      const visible = parsed.visible || "(…)";
+      this.turns.push({ role: "interviewer", text: visible });
+      this.interviewerCount++;
+      if (this.ratings) this.afterRateCount++;
+
+      if (endNow || parsed.complete) {
+        this.status = endNow ? "ended_early" : "complete";
+        this.phase = "close";
+      } else if (parsed.rateItems && !this.ratings) {
+        this.rateItems = parsed.rateItems;
+        this.status = "rating";
+        this.phase = "rate";
+      } else if (parsed.phase) {
+        this.phase = parsed.phase;
+      }
+      // Safety: the page, not the model, guarantees termination.
+      if (this.ratings && this.afterRateCount > LIMITS.maxAfterRate && this.status === "in_progress") {
+        this.status = "complete"; this.phase = "close";
+      }
+      return { visible, phase: this.phase, rateItems: this.status === "rating" ? this.rateItems : null, complete: this.status === "complete" || this.status === "ended_early" };
+    }
+
+    /** Snapshot for persistence / resume. */
+    toJSON() {
+      return { member: this.member, turns: this.turns, phase: this.phase, rateItems: this.rateItems, ratings: this.ratings, status: this.status, interviewerCount: this.interviewerCount, afterRateCount: this.afterRateCount, startedAt: this.startedAt };
+    }
+    static fromJSON(o) {
+      const iv = new Interview(o.member || {});
+      Object.assign(iv, o);
+      return iv;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Scoring
+  // ---------------------------------------------------------------------------
+  const EXPECTED = { 0: 20, 1: 40, 2: 58, 3: 72, 4: 82 };
+  const TOL = 18;
+
+  function band(mean) {
+    if (mean === null || mean === undefined || !Number.isFinite(mean)) return "none";
+    return mean < 40 ? "low" : mean > 70 ? "high" : "moderate";
+  }
+
+  function divergence(level, mean) {
+    if (!Number.isFinite(mean)) return { kind: "aligned", note: "No ratings were given, so confidence could not be compared with practice." };
+    const exp = EXPECTED[clampInt(level, 0, 4, 0)];
+    if (mean > exp + TOL) return { kind: "confident-starter", note: "Rates their confidence well above what their described practice would predict." };
+    if (mean < exp - TOL) return { kind: "cautious-practitioner", note: "Rates their confidence well below what their described practice would predict." };
+    return { kind: "aligned", note: "Confidence and described practice are broadly in step." };
+  }
+
+  function meanRating(items, ratings) {
+    const vals = (items || []).map((it) => ratings && ratings[it.id]).filter((v) => typeof v === "number");
+    if (!vals.length) return null;
+    return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
+  }
+
+  function newId() { return "p_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  /** Build the stored Profile from the interview + the model's JSON (see docs/architecture.md). */
+  function assembleProfile(interview, modelOut, source) {
+    const m = modelOut || {};
+    const pr = m.practice || {};
+    const level = clampInt(pr.level, 0, 4, 0);
+    const items = (interview.rateItems || []).map((it) => ({ id: it.id, task: it.task, level: it.level, rating: interview.ratings ? interview.ratings[it.id] : undefined }));
+    const mean = meanRating(interview.rateItems, interview.ratings);
+    const validKeys = new Set(P.DOMAINS.map((d) => d.key));
+    const domains = Array.isArray(pr.domains) ? pr.domains.filter((d) => d && validKeys.has(d.key)).map((d) => ({ key: d.key, evidence: String(d.evidence || "") })) : [];
+    const stance = P.STANCES.includes(pr.stance) ? pr.stance : "pragmatic";
+    const fb = m.feedback || {};
+    return {
+      id: newId(),
+      createdAt: new Date().toISOString(),
+      source: source || "live",
+      member: { name: interview.member.name || "Anonymous", role: interview.member.role || "", org: "" },
+      practice: {
+        level, levelLabel: P.LADDER[level].label,
+        summary: String(pr.summary || ""),
+        domains,
+        tools: Array.isArray(pr.tools) ? pr.tools.map(String) : [],
+        judgement: String(pr.judgement || ""),
+        stance,
+      },
+      confidence: { items, mean, band: band(mean), pattern: String((m.confidence && m.confidence.pattern) || "") },
+      divergence: divergence(level, mean),
+      wants: Array.isArray(m.wants) ? m.wants.map(String).slice(0, 3) : [],
+      offers: Array.isArray(m.offers) ? m.offers.map(String).slice(0, 2) : [],
+      productSignals: { wouldPayFor: String((m.productSignals && m.productSignals.wouldPayFor) || ""), quote: String((m.productSignals && m.productSignals.quote) || "") },
+      feedback: {
+        headline: String(fb.headline || ("Thanks " + (interview.member.name || "") + ", here is what stood out")),
+        summary: String(fb.summary || ""),
+        strengths: Array.isArray(fb.strengths) ? fb.strengths.map(String).slice(0, 2) : [],
+        nextSteps: Array.isArray(fb.nextSteps) ? fb.nextSteps.filter((s) => s && s.title).map((s) => ({ title: String(s.title), detail: String(s.detail || "") })).slice(0, 2) : [],
+        closing: String(fb.closing || ""),
+      },
+      quotes: Array.isArray(m.quotes) ? m.quotes.map(String).slice(0, 4) : [],
+      transcript: interview.turns.slice(),
+      endedEarly: interview.status === "ended_early",
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Aggregate statistics for the organiser view and the share-back prompt
+  // ---------------------------------------------------------------------------
+  function stats(profiles) {
+    const byLevel = [0, 0, 0, 0, 0];
+    const byDomain = {}; P.DOMAINS.forEach((d) => { byDomain[d.key] = 0; });
+    const byStance = {}; P.STANCES.forEach((s) => { byStance[s] = 0; });
+    const byDivergence = { "aligned": 0, "confident-starter": 0, "cautious-practitioner": 0 };
+    const means = [];
+    const wants = []; const offers = []; const pay = [];
+    for (const p of profiles) {
+      byLevel[clampInt(p.practice.level, 0, 4, 0)]++;
+      for (const d of p.practice.domains || []) if (byDomain[d.key] !== undefined) byDomain[d.key]++;
+      if (byStance[p.practice.stance] !== undefined) byStance[p.practice.stance]++;
+      if (p.divergence && byDivergence[p.divergence.kind] !== undefined) byDivergence[p.divergence.kind]++;
+      if (Number.isFinite(p.confidence.mean)) means.push(p.confidence.mean);
+      (p.wants || []).forEach((w) => wants.push(w));
+      (p.offers || []).forEach((o) => offers.push(o));
+      if (p.productSignals && p.productSignals.wouldPayFor) pay.push(p.productSignals.wouldPayFor);
+    }
+    const meanConfidence = means.length ? Math.round(means.reduce((a, b) => a + b, 0) / means.length) : null;
+    // Domain gaps: domains where fewer than 2 members at level >= 2 show evidence.
+    const strongByDomain = {};
+    P.DOMAINS.forEach((d) => { strongByDomain[d.key] = profiles.filter((p) => p.practice.level >= 2 && (p.practice.domains || []).some((x) => x.key === d.key)).length; });
+    const gaps = P.DOMAINS.filter((d) => strongByDomain[d.key] < 2).map((d) => d.key);
+    return { n: profiles.length, byLevel, byDomain, strongByDomain, gaps, byStance, byDivergence, meanConfidence, wants, offers, wouldPayFor: pay };
+  }
+
+  /**
+   * Who could help whom: for each domain, members with evidence at level >= 3 are potential helpers;
+   * members who named a want matching the domain (by keyword) or have no evidence there and are level <= 1 are seekers.
+   */
+  const WANT_KEYWORDS = {
+    writing: ["writ", "email", "proposal", "report", "post", "text"],
+    prep: ["prepar", "workshop", "session", "design", "programme", "training", "intervention"],
+    analysis: ["analy", "summar", "interview", "survey", "pattern", "data", "document"],
+    thinking: ["think", "case", "sparring", "reflect", "hypothes", "sounding"],
+    client: ["client", "in the room", "team", "live", "with a group"],
+    learning: ["learn", "research", "theory", "method", "course", "read"],
+    admin: ["admin", "plan", "schedul", "invoice", "notes", "organis", "translat"],
+    building: ["build", "prompt", "automat", "tool", "gpt", "project", "script", "template"],
+  };
+
+  function helpMap(profiles) {
+    const out = [];
+    for (const d of P.DOMAINS) {
+      const helpers = profiles.filter((p) => p.practice.level >= 3 && (p.practice.domains || []).some((x) => x.key === d.key));
+      const kws = WANT_KEYWORDS[d.key];
+      const seekers = profiles.filter((p) => (p.wants || []).some((w) => kws.some((k) => w.toLowerCase().includes(k))) && !helpers.includes(p));
+      if (helpers.length || seekers.length) out.push({ domain: d.key, label: d.label, helpers, seekers });
+    }
+    return out;
+  }
+
+  window.Engine = { llm, Interview, LIMITS, safeVisible, parseTurn, parseRate, parsePhase, tryParseJson, band, divergence, meanRating, assembleProfile, stats, helpMap, newId, EXPECTED, TOL };
+})();
