@@ -4,7 +4,7 @@ Prototype of an AI-literacy diagnostic for Systeeminterventies, built as a Claud
 Three views in one page: a member interview with feedback, an organiser map of the network,
 and a share-back page for the whole network. Everything member- and organiser-facing is English.
 
-- Published artifact: see the closing message of the build session (also recorded in `docs/publish.md`).
+- Published artifact: https://claude.ai/artifact/FHH1MXbKeUE9ucHsgYNsce (private to Tim's account; details in `docs/publish.md`).
 - Source: `prototype/src/` (`index.html` plus seven plain script files, no build step).
 - The original app in the repo root is untouched and remains the reference for the Vercel rebuild.
 
@@ -52,14 +52,16 @@ the same items); a 1–5 Likert scale (the guide recommends 0–100 or 0–10 fo
 what makes the comparison defensible, and the organiser view says so.
 
 ### 2.3 How results reach the organiser inside an artifact ★
-Three routes, used together, in this order: the artifact's shared database (`db` capability,
-collection `profiles`, rule: contributors write, only editors and the owner read), localStorage on the
-member's device, and a copyable "result code" the member can send to the organiser, who pastes it into
-the organiser view. The organiser view merges all three.
-*Reason:* the shared database only works for signed-in viewers of Tim's Claude organisation; members of
-the network opening a public link are signed out or outside the organisation, so for a real pilot the
-result code is the only route that works for everyone. In the test session with her, both views run on
-one device, so localStorage already makes the loop visible.
+Three routes, used together: the artifact's shared database (`db` capability, collection `profiles`,
+rule: only the owner and editors read or write), localStorage on the member's device, and a copyable
+"result code" (opaque base64) the member can send to the organiser, who pastes it into the organiser
+view. The organiser view merges all three.
+*Reason:* the shared database only works for signed-in viewers of Tim's Claude organisation, and the
+runtime does not allow "members write but cannot read" (a write level can never sit below the read
+level), so the only honest rule is owner-and-editors only. Members of the network opening a public link
+are signed out or outside the organisation anyway, so for a real pilot the result code is the route that
+works for everyone. In the test session with her, both views run on Tim's account, so the shared store
+and localStorage both make the loop visible.
 *Rejected:* email sending (not possible from an artifact); asking members to paste results into a chat
 (worse than a code). The Vercel rebuild replaces all three with a server and a database (section 5).
 
@@ -116,11 +118,77 @@ spends the *viewer's* Claude usage and asks consent on first use.
 
 ## 3. How it was tested and what was fixed
 
-(filled in below after the test passes)
+No API key was available in the build environment, so Claude could only be called from inside the
+published artifact. Testing therefore ran in three layers, each by an agent that had not built the
+thing it checked.
+
+**Layer 1: prompt behaviour, six simulated interviews** (`tests/prompt-sims/`). A tester executed the
+interviewer and profile prompts in role, adversarially, for a complete beginner, a sceptic, a
+short-answerer, a daily user, an overconfident routine user and a member who stopped early, then
+critiqued each against Bandura's guide and the success bar. Findings and fixes:
+- The divergence rule ignored item difficulty, so an honest beginner rating first-step tasks at 60 was
+  labelled "more confident than practice". Replaced by a level-aware rule: the expected rating for each
+  item depends on the member's practice level and on how far the task sits beyond it; "unrated" added
+  for members who gave no ratings; a non-user can never be a "cautious practitioner".
+- Rating items that needed no AI tool at all slipped in ("write down your data rule"); the rule now
+  requires the tool to be used in every item, and the set must have at least one item one step beyond and
+  one two steps beyond what they described (sets for daily users were floor-heavy).
+- The prompt itself stacked a question ("worth your time, and would you pay?") and forced a sales
+  question on the sceptic; unstacked, made conditional, skipped for members who distrust the exercise.
+- "What could you show a colleague" now skips non-users.
+- The rating request's phase marker was ambiguous (the engine's retry only fires on `rate`); fixed.
+- JSON-safety rules for the rating marker (no double quotes inside tasks, no trailing comma).
+- Turn budget tightened (6 to 11 questions) so the page's forced rating at 16 turns rarely bites.
+- Profile prompt: tools are only those the member uses; non-users get no domain rows.
+What worked without change: non-use and scepticism were treated as the subject, not a failure; the
+"most recent real instance" probing deflated an overclaimer's "I built GPTs" to "a Word document";
+next steps were specific and two-week doable in all six sims.
+
+**Layer 2: code paths, Playwright against a scripted Claude** (`tests/member.spec.js`, 65 checks;
+`tests/organiser.spec.js`, 77 checks; `tests/seed-check.js`). A mock `sample` streams canned turns
+with the real markers, cut mid-marker, plus scenarios: rating phase announced without a marker, a
+thrown error mid-turn, stop-early, resume after reload. Checks include: no control marker ever visible,
+the rating card renders once, the feedback screen shows no level or score, the result code round-trips
+through import, phone width has no horizontal overflow in both themes, the organiser view renders one
+mark per rated member, the heatmap is N by 8, gaps are flagged, the help map and product read render,
+import adds a row, the sample toggle hides seed rows, the share-back generates and copies.
+Fixed from these: seed data made consistent with the engine; chart text unreadable at phone width;
+drawer clipped on phones; a duplicate gutter; the palette failed the dataviz validator and was re-stepped.
+
+**Layer 3: independent review** (`tests/review.md`): a reviewer read the code against the runtime
+type definitions, drove the page as a sceptic and a daily user, and opened the organiser view cold.
+Blockers found and fixed:
+- The landing page and the interviewer told members the organiser sees "an anonymised overview, not a
+  transcript with your name on it", while the organiser view shows first name, transcript and coding.
+  Wording changed to the truth (see 4).
+- A model that never emits a valid rating marker made the interview endless (reproduced at 27 turns).
+  Now two forced rating requests without a marker end the interview with an unrated profile (proved in
+  Node: 19 turns, status complete).
+Should-fix items fixed: the scatter's coarse band contradicted the per-item classification (replaced by a
+per-member tick showing where their own tasks would predict); a stale Retry button could duplicate an
+interviewer turn; db writes carry `undefined` for skipped ratings (JSON-cleaned); the member's result code
+showed the practice level in plain JSON (now opaque); the documented db rule was invalid (see 2.3).
+
+**Not tested:** a real interview with the live model. The mocks prove the plumbing and the sims the
+prompt, but the first live run with Tim is the first real test of adaptation and tone.
 
 ## 4. Known limits before showing her
 
-(filled in below)
+- **Privacy wording is now honest, and that may surprise her.** The organiser can read every member's
+  answers with their first name. If she wants members to be told the organiser sees only the profile,
+  strip `transcript` in `Store.save` (one line) and change the two sentences in `member.js` and
+  `prompts.js`. Decide with her before any member outside the test uses it.
+- **Members outside Tim's Claude organisation cannot write to the shared store**, and signed-out
+  viewers cannot call Claude at all. For the session with her, run everything on Tim's account. A real
+  pilot needs the Vercel build.
+- **Each Claude call spends the viewer's own usage** and asks consent on the first call per view.
+- **Confidence means are only roughly comparable across members**; the per-item difficulty tags make
+  the divergence marks defensible, the raw average less so. The organiser view says this.
+- **The help map matches wants to domains by keywords.** Good enough with the seed; live profiles will be
+  messier. The product read and share-back are generated texts: read before sending.
+- **A member who stops early gets no ratings** and is shown as "unrated" rather than being offered two
+  quick items on the stop screen.
+- **No Dutch.** All text is English by design; the interviewer accepts Dutch answers but replies in English.
 
 ## 5. Porting to Vercel
 
