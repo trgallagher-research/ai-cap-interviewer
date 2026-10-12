@@ -186,6 +186,27 @@ per-member tick showing where their own tasks would predict); a stale Retry butt
 interviewer turn; db writes carry `undefined` for skipped ratings (JSON-cleaned); the member's result code
 showed the practice level in plain JSON (now opaque); the documented db rule was invalid (see 2.3).
 
+**Layer 4: the hybrid round** (`tests/prompt-sims/hybrid-*.md`, `HYBRID-REPORT.md`). The same six
+personas were re-run on the questionnaire-plus-short-interview flow by the same prompt tester.
+
+| Member | Interviewer turns | Member typed words |
+|---|---|---|
+| Never-user | 13 → 7 | 431 → 180 |
+| Sceptic | 13 → 6 | 449 → 168 |
+| Short-answerer | 17 → 10 | 77 → 21, plus 4 chip taps |
+| Daily user | 14 → 8 | 486 → 272 |
+| Overclaimer | 14 → 8 | 298 → 152 |
+| Stopped early | 5 → 5 | 104 → 73 |
+
+Typing roughly halved and no one reached the forced-rating limit. Fixed from this round: the second
+episode is now aimed at the least-supported ticked area, so an overclaim gets tested; claims that were
+asked about and fell apart are recorded separately from areas never reached; quick-reply taps are
+marked and never quoted as the member's words, and chips may only offer times, frequencies or the
+member's own options; a sceptic who tried it once takes the non-user path; each rating item carries a
+"steps beyond" value so stretch items for daily users are judged fairly; an empty tool list from the
+model is kept; stance options no longer presume use; one detail per question.
+Member flow tests now 108 checks, organiser 98, plus the seed verifier.
+
 **Not tested:** a real interview with the live model. The mocks prove the plumbing and the sims the
 prompt, but the first live run with Tim is the first real test of adaptation and tone.
 
@@ -205,6 +226,10 @@ prompt, but the first live run with Tim is the first real test of adaptation and
   messier. The product read and share-back are generated texts: read before sending.
 - **A member who stops early gets no ratings** and is shown as "unrated" rather than being offered two
   quick items on the stop screen.
+- **Ticked areas are claims.** The heatmap shows them hatched, split into "asked, no example" and
+  "not asked about". With a 4 to 7 question interview most ticked areas will not be asked about; that
+  is the price of the shorter interview.
+- **Voice input is not available in the artifact.** It is the obvious next step in the Vercel version.
 - **No Dutch.** All text is English by design; the interviewer accepts Dutch answers but replies in English.
 
 ## 5. Porting to Vercel
