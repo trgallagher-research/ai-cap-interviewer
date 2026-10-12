@@ -69,7 +69,7 @@ const SEED = [
     wants: ["learn where the limits of client-facing use are"], offers: ["can show how to build a project GPT"], pay: "a peer group that meets monthly", quote: "A peer group, monthly, that I would pay for.", quotes: ["Rules first, then tools."],
     q: { frequency: "daily", uses: ["building", "client", "writing", "thinking", "admin"], tools: ["ChatGPT", "Claude"], stance: "enthusiast", offer: ["peer-halfday", "one-to-one"], pay: "yes", canShow: "yes" } }),
   profile({ id: "p_f", name: "Femke", role: "conflict coach", level: 2, mean: 55, kind: "aligned", stance: "pragmatic",
-    summary: "Regular use for session preparation and admin.", domains: [{ key: "prep", evidence: "Prepares session outlines every time." }, { key: "admin", evidence: "Invoices and planning." }],
+    summary: "Regular use for session preparation; ticked admin but gave no example.", domains: [{ key: "prep", evidence: "Prepares session outlines every time." }],
     tools: ["ChatGPT"], items: [{ id: "r1", task: "Prepare a session outline", level: 2, rating: 70 }, { id: "r2", task: "Analyse a set of interview notes", level: 3, rating: 40 }],
     wants: ["prepare a workshop faster with AI"], offers: [], pay: "", quotes: ["It saves me an evening a week."], endedEarly: true,
     q: { frequency: "weekly", uses: ["prep", "admin"], tools: ["ChatGPT"], stance: "pragmatic", offer: ["demos", "peer-halfday"], pay: "no", canShow: "no" } }),

@@ -6,6 +6,7 @@ eval(src("prompts.js")); eval(src("engine.js")); eval(src("seed.js"));
 const { Prompts: P, Engine: E, SEED } = window;
 const keys = new Set(P.DOMAINS.map((d) => d.key));
 const errs = []; const ids = new Set();
+const T = { evidenced: 0, ticked: 0, tickedWithEpisode: 0, probed: 0 };
 const byLevel = [0,0,0,0,0], byStance = {}, byDiv = {};
 for (const p of SEED) {
   const n = p.member.name;
@@ -62,14 +63,24 @@ for (const p of SEED) {
     const sig = E.signalsFromAnswers(a), ps = p.productSignals || {};
     for (const k of ["offerKeys", "pay", "wouldPayFor"]) if (JSON.stringify(sig[k]) !== JSON.stringify(ps[k])) errs.push(`${n}: productSignals.${k} ${JSON.stringify(ps[k])} should be ${JSON.stringify(sig[k])}`);
     if (typeof ps.quote !== "string" || !ps.quote) errs.push(`${n}: productSignals.quote missing`);
+    const cap = lvl === 4 ? 3 : 2;
+    if (p.practice.domains.length > cap) errs.push(`${n}: ${p.practice.domains.length} evidenced areas (max ${cap}: a short interview yields one or two episodes)`);
+    if (a.frequency === "never" && p.practice.domains.length) errs.push(`${n}: never-user with domains`);
+    const probed = p.practice.probedNoEpisode;
+    if (!Array.isArray(probed)) errs.push(`${n}: practice.probedNoEpisode missing`);
+    else for (const k of probed) if (!sr.domains.includes(k) || p.practice.domains.some((d) => d.key === k)) errs.push(`${n}: probedNoEpisode ${k} must be ticked and without evidence`);
+    T.evidenced += p.practice.domains.length; T.ticked += sr.domains.length;
+    T.tickedWithEpisode += sr.domains.filter((k) => p.practice.domains.some((d) => d.key === k)).length;
+    T.probed += (probed || []).length;
     const ev = new Set(p.practice.domains.map((d) => d.key));
     const claimed = sr.domains.filter((k) => !ev.has(k)), unticked = [...ev].filter((k) => !sr.domains.includes(k));
-    console.log(`   questionnaire ${a.frequency.padEnd(7)} ticked=[${sr.domains}] claimedNoEpisode=[${claimed}] evidenceNotTicked=[${unticked}] offer=[${a.offer}] pay=${sig.pay || "-"} canShow=${a.canShow || "-"}`);
+    console.log(`   questionnaire ${a.frequency.padEnd(7)} ticked=[${sr.domains}] claimedNoEpisode=[${claimed}] probed=[${p.practice.probedNoEpisode}] evidenceNotTicked=[${unticked}] offer=[${a.offer}] pay=${sig.pay || "-"} canShow=${a.canShow || "-"}`);
   }
   byLevel[lvl]++; byStance[p.practice.stance] = (byStance[p.practice.stance]||0)+1; byDiv[div.kind] = (byDiv[div.kind]||0)+1;
   console.log(`${p.id} ${n.padEnd(8)} L${lvl} ${p.practice.stance.padEnd(10)} mean=${String(mean).padStart(3)} ${band.padEnd(8)} ${div.kind}${p.endedEarly ? "  (ended early)" : ""}`);
 }
 console.log("n =", SEED.length, "byLevel", byLevel, "byStance", byStance, "byDivergence", byDiv);
+console.log(`evidenced areas ${T.evidenced}; ticked areas ${T.ticked}, of which with an episode ${T.tickedWithEpisode}, without ${T.ticked - T.tickedWithEpisode} (probed ${T.probed}, unprobed ${T.ticked - T.tickedWithEpisode - T.probed})`);
 const st = E.stats(SEED); console.log("stats.questionnaire", JSON.stringify(st.questionnaire, null, 1)); console.log("stats.gaps", st.gaps, "strongByDomain", st.strongByDomain, "byDomain", st.byDomain);
 for (const h of E.helpMap(SEED)) console.log(`help ${h.domain.padEnd(8)} helpers=[${h.helpers.map(p=>p.member.name)}] seekers=[${h.seekers.map(p=>p.member.name)}]`);
 if (/—/.test(src("seed.js"))) errs.push("em-dash present in seed.js");

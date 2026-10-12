@@ -205,7 +205,21 @@ marked and never quoted as the member's words, and chips may only offer times, f
 member's own options; a sceptic who tried it once takes the non-user path; each rating item carries a
 "steps beyond" value so stretch items for daily users are judged fairly; an empty tool list from the
 model is kept; stance options no longer presume use; one detail per question.
-Member flow tests now 108 checks, organiser 98, plus the seed verifier.
+Member flow tests now 108 checks, organiser 107, plus the seed verifier.
+
+**Layer 5: independent review of the hybrid** (`tests/review-hybrid.md`), by a reviewer who built
+nothing. Fixed: skipped questions relied on a style rule only the test harness supplied, so the page
+now hides them itself and the harness no longer helps; the "Something else" chip sent those words as an
+answer and now just focuses the answer box; routing for sceptics and uneasy members was one ambiguous
+sentence and is now decided in code (never-users, and members who tried once but ticked nothing, take
+the non-user path; doubtful or uneasy users keep the practice path with their concern explored); the
+retry nudges dropped the "steps beyond" field; the sample data showed far more examples per member than
+a short interview yields (now at most two per member, three for one level-4 member), and one never-user had evidence;
+the scatter drew lines for non-users' expected low confidence; the pay tally implied one answer per
+offer and merged "no" with "not answered"; the offer list only offered more AI, so "a conversation
+about whether and when not to use it" was added and pay answers became Yes / Possibly / No / Don't
+know yet. The help map now counts routine-or-better members as helpers, the same bar as the gap rule,
+which surfaced the routine user who is the network's best help with meeting notes.
 
 **Not tested:** a real interview with the live model. The mocks prove the plumbing and the sims the
 prompt, but the first live run with Tim is the first real test of adaptation and tone.

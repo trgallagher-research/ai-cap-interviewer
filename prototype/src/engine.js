@@ -479,7 +479,7 @@
   }
 
   /**
-   * Who could help whom: for each domain, members with evidence at level >= 3 are potential helpers;
+   * Who could help whom: for each domain, members with evidence at level >= 2 (routine or better, the same bar as the gap rule) are potential helpers;
    * members who named a want matching the domain (by keyword) or have no evidence there and are level <= 1 are seekers.
    */
   const WANT_KEYWORDS = {
@@ -496,7 +496,7 @@
   function helpMap(profiles) {
     const out = [];
     for (const d of P.DOMAINS) {
-      const helpers = profiles.filter((p) => p.practice.level >= 3 && (p.practice.domains || []).some((x) => x.key === d.key));
+      const helpers = profiles.filter((p) => p.practice.level >= 2 && (p.practice.domains || []).some((x) => x.key === d.key));
       const kws = WANT_KEYWORDS[d.key];
       const seekers = profiles.filter((p) => (p.wants || []).some((w) => kws.some((k) => w.toLowerCase().includes(k))) && !helpers.includes(p));
       if (helpers.length || seekers.length) out.push({ domain: d.key, label: d.label, helpers, seekers });
