@@ -31,7 +31,7 @@ function profile(o) {
     base.practice.stance = a.stance;
     base.selfReport = { frequency: a.frequency, domains: a.frequency === "never" ? [] : a.uses.slice(), tools: a.frequency === "never" ? [] : a.tools.slice(), canShow: a.canShow || "" };
     const keys = a.offer.filter((k) => k !== "nothing");
-    const pay = a.pay || (a.offer.includes("nothing") ? "no" : "");
+    const pay = a.pay || "";
     base.productSignals = { wouldPayFor: (pay === "yes" || pay === "maybe") ? keys.join("; ") : "", offerKeys: keys, pay, quote: o.quote || "" };
   } else { base.questionnaire = null; base.selfReport = null; }
   if (o.transcript) base.transcript = o.transcript;

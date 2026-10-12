@@ -167,7 +167,7 @@
   // ---------------------------------------------------------------------------
   // Interview state machine
   // ---------------------------------------------------------------------------
-  const LIMITS = { maxQuestionsBeforeRate: 9, minQuestionsBeforeRate: 3, maxAfterRate: 2, maxForcedRateAttempts: 2 };
+  const LIMITS = { maxQuestionsBeforeRate: 9, maxAfterRate: 2, maxForcedRateAttempts: 2 };
 
   /** Interview holds the transcript and drives one turn at a time. UI-agnostic. */
   class Interview {
@@ -182,7 +182,8 @@
       this.interviewerCount = 0;
       this.afterRateCount = 0;
       this.rateRetries = 0;
-      this.forcedRateAttempts = 0; // forceRate nudges sent without a valid RATE marker coming back
+      this.forcedRateAttempts = 0; // forceRate nudges answered without a valid RATE marker
+      this.chips = null;          // quick replies offered with the latest question
       this.startedAt = new Date().toISOString();
     }
 
@@ -214,8 +215,7 @@
       if (this.interviewerCount >= LIMITS.maxQuestionsBeforeRate) {
         // Two forced attempts without a valid marker: give up on ratings and close (profile is unrated).
         if (this.forcedRateAttempts >= LIMITS.maxForcedRateAttempts) return P.NUDGES.forceClose;
-        this.forcedRateAttempts++;
-        return P.NUDGES.forceRate;
+        return P.NUDGES.forceRate; // counted in next() only once a reply arrives, so failed calls and retries do not use it up
       }
       return "";
     }
@@ -237,6 +237,7 @@
         onText: (text) => { full = text; if (onText) onText(safeVisible(text)); },
       });
       full = res.text || full;
+      if (nudge === P.NUDGES.forceRate) this.forcedRateAttempts++;
       let parsed = parseTurn(full);
 
       // If the model said it was going to the rate phase but gave no valid items, ask once more.

@@ -807,7 +807,16 @@
     });
     if (words.length) {
       box.appendChild(el("div", { class: "eyebrow", style: { marginTop: ".6rem" } }, "In their words"));
-      box.appendChild(el("ul", { class: "words" }, words.map((w) => el("li", null, [w.t, " ", el("small", null, nameOf(w.p))]))));
+      const ul = el("ul", { class: "words" });
+      const draw = (all) => { ul.textContent = ""; (all ? words : words.slice(0, 4)).forEach((w) => ul.appendChild(el("li", null, [w.t, " ", el("small", null, nameOf(w.p))]))); };
+      draw(false);
+      box.appendChild(ul);
+      if (words.length > 4) {
+        let open = false;
+        const more = el("button", { class: "btn quiet", type: "button", style: { padding: ".2rem .4rem", marginTop: ".3rem" } }, `Show all ${words.length}`);
+        more.addEventListener("click", () => { open = !open; draw(open); more.textContent = open ? "Show fewer" : `Show all ${words.length}`; });
+        box.appendChild(more);
+      }
     }
     return box;
   }
