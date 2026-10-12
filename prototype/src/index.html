@@ -1,0 +1,307 @@
+<title>AI at Work Diagnostic</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Serif:wght@500;600&display=swap">
+<style>
+  /* Layout: one quiet centred column (44rem) for member/network; 72rem dashboard for the organiser.
+     Tone: a well-run practitioners' circle. Utilitarian-polished, no hero. */
+  :root {
+    --bg: #F7F8F7; --surface: #FFFFFF; --surface-2: #EEF1F0;
+    --fg: #19211F; --fg-2: #46514E; --muted: #778481; --line: #D5DBD9;
+    --accent: #0F6E72; --accent-fg: #FFFFFF; --accent-soft: #DDEFEF;
+    --warm: #B5731C; --good: #2E7D4F; --warn: #B26A00; --bad: #B23A3A;
+    --radius: 6px; --radius-lg: 12px;
+    --font-display: "IBM Plex Serif", Georgia, serif;
+    --font-body: "IBM Plex Sans", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+    --focus: 0 0 0 3px var(--accent-soft), 0 0 0 5px var(--accent);
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121716; --surface: #1B2321; --surface-2: #232D2B;
+      --fg: #EAF0EE; --fg-2: #B6C2BF; --muted: #7F8D8A; --line: #324240;
+      --accent: #5FC2C4; --accent-fg: #0B1F20; --accent-soft: #16393A;
+      --warm: #E0A24A; --good: #6CC48E; --warn: #E5A33B; --bad: #E07070;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121716; --surface: #1B2321; --surface-2: #232D2B;
+    --fg: #EAF0EE; --fg-2: #B6C2BF; --muted: #7F8D8A; --line: #324240;
+    --accent: #5FC2C4; --accent-fg: #0B1F20; --accent-soft: #16393A;
+    --warm: #E0A24A; --good: #6CC48E; --warn: #E5A33B; --bad: #E07070;
+    color-scheme: dark;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: var(--font-body); font-size: 16px; line-height: 1.55;
+    -webkit-font-smoothing: antialiased; overflow-x: hidden;
+  }
+  h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 600; line-height: 1.25; margin: 0; text-wrap: balance; }
+  h1 { font-size: 1.75rem; } h2 { font-size: 1.35rem; } h3 { font-size: 1.1rem; }
+  p { margin: 0; }
+  a { color: var(--accent); }
+  code, .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  :focus-visible { outline: none; box-shadow: var(--focus); border-radius: var(--radius); }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  }
+
+  /* Nav */
+  .topnav {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10;
+    background: var(--surface); border-bottom: 1px solid var(--line);
+  }
+  .topnav-inner {
+    max-width: 72rem; margin: 0 auto; padding: 0.6rem 16px;
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem 1rem; flex-wrap: wrap;
+  }
+  .wordmark { font-family: var(--font-display); font-weight: 600; font-size: 1rem; color: var(--fg); text-decoration: none; }
+  .wordmark span { color: var(--muted); font-family: var(--font-body); font-weight: 400; font-size: 0.9rem; }
+  .navlinks { display: flex; gap: 0.25rem; flex-wrap: wrap; }
+  .navlinks a {
+    text-decoration: none; color: var(--fg-2); padding: 0.3rem 0.65rem; border-radius: var(--radius); font-size: 0.95rem;
+  }
+  .navlinks a:hover { background: var(--surface-2); color: var(--fg); }
+  .navlinks a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 500; }
+
+  /* Page column */
+  #view { max-width: 44rem; margin: 0 auto; padding-block: 1.5rem 3rem; padding-inline: 16px; min-width: 0; }
+  #view.wide { max-width: 72rem; }
+  .footnote { max-width: 72rem; margin: 0 auto; padding: 0 16px 2rem; color: var(--muted); font-size: 0.8rem; }
+
+  .stack { display: flex; flex-direction: column; gap: 1rem; }
+  .stack-sm { display: flex; flex-direction: column; gap: 0.5rem; }
+  .row { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
+  .lead { color: var(--fg-2); max-width: 40rem; }
+  .small { font-size: 0.875rem; color: var(--fg-2); }
+  .muted { color: var(--muted); }
+  .eyebrow { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+
+  /* Controls */
+  .btn {
+    font: inherit; font-weight: 500; font-size: 0.95rem; cursor: pointer;
+    padding: 0.55rem 1rem; border-radius: var(--radius);
+    border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .btn:hover { background: var(--surface-2); }
+  .btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.quiet { background: transparent; border-color: transparent; color: var(--fg-2); }
+  .btn.quiet:hover { background: var(--surface-2); color: var(--fg); }
+  .btn:disabled { opacity: 0.55; cursor: default; }
+  .linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; cursor: pointer; }
+  .linkbtn:disabled { color: var(--muted); cursor: default; }
+  label.field { display: flex; flex-direction: column; gap: 0.3rem; font-weight: 500; font-size: 0.95rem; }
+  .input, .textarea {
+    font: inherit; width: 100%; color: var(--fg); background: var(--surface);
+    border: 1px solid var(--line); border-radius: var(--radius); padding: 0.55rem 0.7rem;
+  }
+  .input::placeholder, .textarea::placeholder { color: var(--muted); }
+  .textarea { resize: vertical; min-height: 3.2rem; line-height: 1.45; }
+  .textarea.code { font-family: var(--font-mono); font-size: 0.8rem; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: 1.1rem 1.2rem; min-width: 0; }
+  .pill {
+    display: inline-block; font-size: 0.75rem; font-weight: 500; padding: 0.15rem 0.55rem; border-radius: 999px;
+    background: var(--surface-2); color: var(--fg-2); border: 1px solid var(--line); white-space: nowrap;
+  }
+  .pill.good { color: var(--good); border-color: var(--good); background: transparent; }
+  .pill.warn { color: var(--warn); border-color: var(--warn); background: transparent; }
+  .pill.bad { color: var(--bad); border-color: var(--bad); background: transparent; }
+  .pill.accent { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+  .notice { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 0.7rem 0.9rem; border-radius: 0 var(--radius) var(--radius) 0; font-size: 0.9rem; }
+  .notice.bad { border-left-color: var(--bad); background: var(--surface-2); }
+  .notice.warn { border-left-color: var(--warn); background: var(--surface-2); }
+  hr.sep { border: 0; border-top: 1px solid var(--line); margin: 0.5rem 0; }
+
+  /* Toast */
+  #toast {
+    position: fixed; left: 50%; bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+    background: var(--fg); color: var(--bg); padding: 0.55rem 1rem; border-radius: var(--radius); font-size: 0.9rem;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.2); z-index: 50; max-width: calc(100vw - 32px);
+  }
+
+  /* Spinner */
+  .spinner {
+    display: inline-block; width: 1rem; height: 1rem; border-radius: 50%;
+    border: 2px solid var(--line); border-top-color: var(--accent); animation: spin 0.8s linear infinite; vertical-align: -0.2rem;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Member view: chat */
+  .chat { display: flex; flex-direction: column; gap: 0.65rem; }
+  .bubble { max-width: 88%; padding: 0.65rem 0.9rem; border-radius: var(--radius-lg); line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+  .bubble.interviewer { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 4px; }
+  .bubble.member { align-self: flex-end; background: var(--accent-soft); color: var(--fg); border-bottom-right-radius: 4px; }
+  .bubble.member.ratings { font-size: 0.9rem; }
+  .bubble.streaming::after { content: "▍"; color: var(--accent); animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .composer { display: flex; flex-direction: column; gap: 0.5rem; position: sticky; bottom: env(safe-area-inset-bottom, 0px); background: var(--bg); padding-top: 0.5rem; }
+  .composer-row { display: flex; gap: 0.5rem; align-items: flex-end; }
+  .composer-row .textarea { flex: 1; min-width: 0; }
+  .progress { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; font-size: 0.82rem; color: var(--muted); }
+  .phase-dots { display: inline-flex; gap: 4px; margin-right: 0.4rem; vertical-align: middle; }
+  .phase-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); display: inline-block; }
+  .phase-dots i.on { background: var(--accent); }
+
+  /* Rating card */
+  .rate-card { border-color: var(--accent); }
+  .rate-item { display: flex; flex-direction: column; gap: 0.45rem; padding: 0.85rem 0; border-top: 1px solid var(--line); }
+  .rate-item:first-of-type { border-top: 0; }
+  .rate-item.skipped .rate-task, .rate-item.skipped .rate-slider { opacity: 0.45; }
+  .rate-task { font-weight: 500; }
+  .rate-slider { display: flex; align-items: center; gap: 0.75rem; }
+  .rate-slider input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); }
+  .rate-value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; min-width: 2.4rem; text-align: right; font-size: 1.05rem; }
+  .rate-anchors { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--muted); gap: 0.5rem; }
+  .rate-anchors span:nth-child(2) { text-align: center; } .rate-anchors span:last-child { text-align: right; }
+  .skip { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; color: var(--fg-2); cursor: pointer; }
+
+  /* Feedback */
+  .feedback h1 { font-size: 1.6rem; }
+  .steps { display: flex; flex-direction: column; gap: 0.75rem; }
+  .step { display: grid; grid-template-columns: auto 1fr; gap: 0.75rem; align-items: start; }
+  .step .num { font-family: var(--font-mono); color: var(--accent); font-weight: 500; padding-top: 0.1rem; }
+  ul.clean { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 0.35rem; }
+  table.ratings { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  table.ratings td { padding: 0.4rem 0; border-top: 1px solid var(--line); vertical-align: top; }
+  table.ratings td.num { text-align: right; font-family: var(--font-mono); white-space: nowrap; padding-left: 1rem; }
+
+  @media (max-width: 480px) {
+    .bubble { max-width: 96%; }
+    .topnav-inner { padding-block: 0.5rem; }
+  }
+</style>
+
+<nav class="topnav" aria-label="Main">
+  <div class="topnav-inner">
+    <a class="wordmark" href="#member">AI at Work Diagnostic <span>· Systeeminterventies</span></a>
+    <div class="navlinks" id="navlinks">
+      <a href="#member" data-view="member">Member</a>
+      <a href="#organiser" data-view="organiser">Organiser</a>
+      <a href="#network" data-view="network">Share-back</a>
+    </div>
+  </div>
+</nav>
+<main id="view" aria-live="polite"></main>
+<p class="footnote">Prototype. The Organiser and Share-back pages are open here so they can be tested; in the real version they would sit behind the organiser's login.</p>
+
+<script src="prompts.js"></script>
+<script src="engine.js"></script>
+<script src="store.js"></script>
+<script src="seed.js"></script>
+<script src="member.js"></script>
+<script src="organiser.js"></script>
+<script src="network.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  // --- UI helpers -----------------------------------------------------------
+  function el(tag, attrs, children) {
+    const node = document.createElement(tag);
+    attrs = attrs || {};
+    for (const k of Object.keys(attrs)) {
+      const v = attrs[k];
+      if (v === undefined || v === null || v === false) continue;
+      if (k === "class") node.className = v;
+      else if (k === "on") { for (const ev of Object.keys(v)) node.addEventListener(ev, v[ev]); }
+      else if (k === "style" && typeof v === "object") Object.assign(node.style, v);
+      else if (k === "dataset") Object.assign(node.dataset, v);
+      else if (k === "html") node.innerHTML = v;
+      else if (k in node && k !== "list" && k !== "form") { try { node[k] = v; } catch (_) { node.setAttribute(k, v); } }
+      else node.setAttribute(k, v === true ? "" : v);
+    }
+    const kids = Array.isArray(children) ? children : (children === undefined ? [] : [children]);
+    for (const c of kids) {
+      if (c === null || c === undefined || c === false) continue;
+      node.appendChild(typeof c === "string" || typeof c === "number" ? document.createTextNode(String(c)) : c);
+    }
+    return node;
+  }
+
+  let toastTimer = null;
+  function toast(msg) {
+    let t = document.getElementById("toast");
+    if (!t) { t = el("div", { id: "toast", role: "status" }); document.body.appendChild(t); }
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, 3000);
+  }
+
+  function copy(text, btn) {
+    const done = () => {
+      if (btn) {
+        const old = btn.textContent; btn.textContent = "Copied";
+        setTimeout(() => { btn.textContent = old; }, 2000);
+      }
+      toast("Copied to clipboard");
+    };
+    const fallback = () => {
+      try {
+        const ta = el("textarea", { value: text, readOnly: true, style: { position: "fixed", opacity: "0", left: "0", top: "0" } });
+        document.body.appendChild(ta); ta.select();
+        const ok = document.execCommand && document.execCommand("copy");
+        document.body.removeChild(ta);
+        if (ok) done(); else toast("Copy failed. Select the text and copy it by hand.");
+      } catch (_) { toast("Copy failed. Select the text and copy it by hand."); }
+    };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, fallback);
+      } else fallback();
+    } catch (_) { fallback(); }
+  }
+
+  // --- Router -----------------------------------------------------------------
+  const VIEWS = {
+    member: { global: "MemberView", label: "Member view", wide: false },
+    organiser: { global: "OrganiserView", label: "Organiser view", wide: true },
+    network: { global: "NetworkView", label: "Share-back view", wide: false },
+  };
+  const App = { ui: { el, toast, copy }, currentView: null, views: VIEWS };
+
+  function currentHash() {
+    const h = (location.hash || "").replace(/^#/, "").trim();
+    return VIEWS[h] ? h : "member";
+  }
+  function navigate(hash) {
+    const token = String(hash || "").replace(/^#/, "");
+    if (!VIEWS[token]) return;
+    if (currentHash() === token && location.hash) { render(); return; }
+    location.hash = token;
+  }
+  function render() {
+    const name = currentHash();
+    const spec = VIEWS[name];
+    const container = document.getElementById("view");
+    container.className = spec.wide ? "wide" : "";
+    container.replaceChildren();
+    document.querySelectorAll("#navlinks a").forEach((a) => {
+      if (a.dataset.view === name) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current");
+    });
+    App.currentView = name;
+    const mod = window[spec.global];
+    if (!mod || typeof mod.render !== "function") {
+      container.appendChild(el("div", { class: "card stack-sm" }, [
+        el("h2", {}, spec.label + " not loaded yet"),
+        el("p", { class: "small" }, "This part of the prototype is still being built. The other views work."),
+      ]));
+      return;
+    }
+    try { mod.render(container); }
+    catch (e) {
+      container.appendChild(el("div", { class: "notice bad" }, "This view hit an error: " + (e && e.message ? e.message : String(e))));
+    }
+    window.scrollTo(0, 0);
+  }
+  App.navigate = navigate;
+  App.render = render;
+  window.App = App;
+  window.addEventListener("hashchange", render);
+  render();
+})();
+</script>
