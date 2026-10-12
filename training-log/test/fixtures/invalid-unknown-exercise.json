@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "date": "2026-07-06",
+  "source": "PT",
+  "block": "Rehab Block 1",
+  "session": "Shoulder Rehab",
+  "exercises": [
+    {
+      "order": 1,
+      "exercise": "Cuban Press",
+      "load_kg": 10,
+      "scheme": "3x12",
+      "reps": [12, 12, 12],
+      "rpe": 6,
+      "notes": "not in the Library — should quarantine, not silently drop"
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "date": "2026-07-06",
+  "source": "HYP",
+  "block": "Hypertrophy Block 3",
+  "session": "Push A",
+  "exercises": [
+    {
+      "order": 1,
+      "exercise": "Bench Press",
+      "load_kg": 80,
+      "scheme": "4x8",
+      "reps": [8, 8, 8, 8],
+      "rpe": 8,
+      "notes": null
+    },
+    {
+      "order": 2,
+      "exercise": "Bankdrukken",
+      "load_kg": 80,
+      "scheme": "4x8",
+      "reps": [8, 8, 7, 6],
+      "rpe": 9,
+      "notes": "second exercise resolved via Dutch alias, on purpose, for the fixture"
+    },
+    {
+      "order": 3,
+      "exercise": "Overhead Press",
+      "load_kg": 40,
+      "scheme": "3x10",
+      "reps": [10, 9, 8],
+      "rpe": 9.5,
+      "notes": null
+    }
+  ],
+  "session_notes": "Felt strong on bench, shoulder a little tight on OHP."
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "date": "2026-07-06",
+  "source": "HYP",
+  "block": "Hypertrophy Block 3",
+  "session": "Push A",
+  "exercises": [
+    {
+      "order": 1,
+      "exercise": "Bench Press",
+      "load_kg": 80,
+      "reps": [8, 8, 8, 8],
+      "rpe": 8
+    }
+  ]
+}

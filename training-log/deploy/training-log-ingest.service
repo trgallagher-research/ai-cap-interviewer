@@ -1,0 +1,28 @@
+# Stage 2 scaffold — NOT installed yet. See deploy/README.md.
+#
+# A oneshot unit that runs a single ingest pass. Paired with
+# training-log-ingest.timer, which triggers it on a schedule — a timer is
+# preferred here over a long-running `watch` process: systemd handles
+# retries/backoff for free, and a stuck/leaked process self-resolves at the
+# next tick instead of needing a supervisor.
+#
+# Install (as the owner user, not root — this runs as a user unit):
+#   mkdir -p ~/.config/systemd/user
+#   cp training-log-ingest.service training-log-ingest.timer ~/.config/systemd/user/
+#   # edit WorkingDirectory below to the real checkout path first
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now training-log-ingest.timer
+#   loginctl enable-linger $USER   # so it runs even when you're not logged in
+
+[Unit]
+Description=Training log ingest — one pass over the Drive inbox
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/REPLACE_ME/aligned-interviewer/training-log
+ExecStart=/usr/bin/npx tsx src/cli.ts run
+# .env in WorkingDirectory is picked up automatically (dotenv); no
+# EnvironmentFile needed since this is single-user and the file's
+# permissions are already the user's own.

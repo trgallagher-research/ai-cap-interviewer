@@ -1,0 +1,34 @@
+# Dependencies
+/node_modules
+
+# Next.js
+/.next/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# Env / secrets
+.env
+.env*.local
+!.env.local.example
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Interview data (don't commit respondent transcripts)
+/data/
+*.transcript.json
+
+# Vercel
+.vercel
+
+# training-log service (secrets, local state, node_modules)
+training-log/node_modules/
+training-log/secrets/
+training-log/data/
+training-log/.env
+training-log/.env.*
+!training-log/.env.example

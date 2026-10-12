@@ -1,0 +1,684 @@
+/* Calm, editorial, Anthropic-adjacent: warm off-white paper, ink text,
+   terracotta accent, serif display type. The interview screen is the centerpiece
+   and is kept deliberately quiet. */
+
+:root {
+  --paper: #f5f2ec;
+  --card: #fffdf9;
+  --ink: #20211d;
+  --muted: #6f6a60;
+  --line: #e4ddd1;
+  --accent: #c75b39; /* terracotta */
+  --accent-ink: #fff;
+  --interviewer: #efeae0;
+  --respondent: #c75b39;
+  --ok: #3f7d56;
+
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--serif);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+a {
+  color: var(--accent);
+}
+
+/* Layout shells -------------------------------------------------------------- */
+
+.shell {
+  max-width: 880px;
+  margin: 0 auto;
+  /* dvh (not vh) so the mobile browser chrome doesn't push the composer off-screen;
+     safe-area inset keeps it clear of the iOS home indicator. */
+  padding: 32px 20px calc(56px + env(safe-area-inset-bottom, 0px));
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+/* Wider variant for two-pane workspaces (the study builder, results) where 880px
+   feels cramped on a laptop. Still capped so forms never stretch uncomfortably wide,
+   and the existing 720px grid breakpoint collapses it to one column on small screens. */
+.shell.wide {
+  max-width: 1200px;
+}
+
+/* Checkbox opt-in rows (overrides the column-stacked default label). */
+.opt-in {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-weight: 400;
+  margin: 0;
+}
+
+.masthead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 24px;
+}
+.masthead .brand {
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.masthead .steps {
+  display: flex;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.masthead .steps .step {
+  padding: 2px 10px;
+  border-radius: 999px;
+}
+.masthead .steps .step.active {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.masthead .steps .step.done {
+  color: var(--ok);
+}
+
+/* Generic bits --------------------------------------------------------------- */
+
+.lede {
+  color: var(--muted);
+  font-size: 17px;
+  max-width: 60ch;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+  margin: 18px 0;
+}
+label .hint {
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+input[type="text"],
+textarea {
+  font: inherit;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--ink);
+  resize: vertical;
+}
+input[type="text"]:focus,
+textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button {
+  font: inherit;
+  font-weight: 600;
+  padding: 11px 20px;
+  border: none;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  cursor: pointer;
+}
+button.secondary {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.error {
+  color: #b3261e;
+  font-size: 14px;
+  margin: 8px 0;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px 20px;
+}
+
+/* Plan stage ----------------------------------------------------------------- */
+
+.plan-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 720px) {
+  .plan-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.guide h3 {
+  margin: 0 0 4px;
+}
+.guide .strategy {
+  color: var(--muted);
+  margin-bottom: 16px;
+}
+.guide ol {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.guide li .obj-text {
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 6px;
+  padding: 4px 6px;
+  font: inherit;
+}
+.guide li .obj-text:hover,
+.guide li .obj-text:focus {
+  border-color: var(--line);
+  background: var(--paper);
+}
+.guide li .intent {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 0 6px;
+}
+
+/* Interview stage ------------------------------------------------------------ */
+
+.interview {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+/* Abstract progress: respondents see how far along they are, never the objectives. */
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.progress-track {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--interviewer);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--ok);
+  transition: width 0.6s ease;
+}
+.progress-label {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.coverage {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.coverage .pill {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--muted);
+  background: var(--card);
+}
+.coverage .pill.addressed {
+  border-color: var(--ok);
+  color: var(--ok);
+}
+.coverage .pill.addressed::before {
+  content: "✓ ";
+}
+
+.transcript {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 2px 16px;
+}
+.bubble {
+  max-width: 80%;
+  padding: 12px 16px;
+  border-radius: 16px;
+  line-height: 1.55;
+}
+.bubble .who {
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.7;
+  display: block;
+  margin-bottom: 3px;
+}
+.bubble p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.bubble.interviewer {
+  background: var(--interviewer);
+  align-self: flex-start;
+  border-bottom-left-radius: 5px;
+}
+.bubble.respondent {
+  background: var(--respondent);
+  color: #fff;
+  align-self: flex-end;
+  border-bottom-right-radius: 5px;
+}
+.bubble.respondent .who {
+  color: #f3e2db;
+}
+
+.composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.composer textarea {
+  flex: 1;
+  min-width: 160px;
+  min-height: 52px;
+  max-height: 160px;
+}
+
+/* Voice input ---------------------------------------------------------------- */
+.voice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.voice.recording {
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+}
+.voice-btn {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+.voice-btn.keep {
+  min-width: 38px;
+  min-height: 38px;
+  border-color: var(--ok);
+  color: var(--ok);
+}
+.voice-btn.cancel {
+  min-width: 38px;
+  min-height: 38px;
+  color: var(--muted);
+}
+.voice-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: voice-pulse 1.1s ease-in-out infinite;
+}
+@keyframes voice-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.7); }
+}
+.voice-time {
+  font-size: 13px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.voice-error {
+  font-size: 12px;
+  color: #b3261e;
+}
+
+.finish-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.finish-bar .note {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* Synthesis stage ------------------------------------------------------------ */
+
+.synthesis {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.synthesis .section-title {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+.theme {
+  margin-bottom: 14px;
+}
+.theme .theme-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.theme .prevalence {
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 600;
+}
+.theme p {
+  margin: 4px 0 0;
+  color: var(--ink);
+}
+.quote {
+  border-left: 3px solid var(--accent);
+  padding: 4px 0 4px 14px;
+  margin: 0 0 14px;
+  font-family: var(--serif);
+  font-size: 17px;
+  color: var(--ink);
+}
+.quote .quote-theme {
+  display: block;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.coverage-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.coverage-row .mark {
+  font-weight: 700;
+}
+.coverage-row .mark.yes {
+  color: var(--ok);
+}
+.coverage-row .mark.no {
+  color: var(--muted);
+}
+.coverage-row .ev {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.center-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+}
+.spinner-note {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* Landscape scans ------------------------------------------------------------ */
+
+/* State pill on the scans list. */
+.scan-pill {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--interviewer);
+  color: var(--muted);
+}
+.scan-pill.running,
+.scan-pill.starting {
+  background: #efe3d8;
+  color: var(--accent);
+}
+.scan-pill.done {
+  background: #e2efe6;
+  color: var(--ok);
+}
+.scan-pill.error,
+.scan-pill.halted {
+  background: #f3e0db;
+  color: var(--accent);
+}
+
+/* Progress stage tracker on the run screen. */
+.scan-stages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.scan-stages li {
+  padding-left: 24px;
+  position: relative;
+  color: var(--muted);
+}
+.scan-stages li::before {
+  content: "○";
+  position: absolute;
+  left: 0;
+}
+.scan-stages li.done {
+  color: var(--ink);
+}
+.scan-stages li.done::before {
+  content: "✓";
+  color: var(--ok);
+}
+.scan-stages li.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+.scan-stages li.active::before {
+  content: "◉";
+  color: var(--accent);
+}
+
+/* Report layout. */
+.scan-section {
+  margin: 28px 0 12px;
+}
+.scan-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+.scan-h4 {
+  font-family: var(--sans);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  margin: 0 0 6px;
+}
+.scan-list {
+  margin: 0;
+  padding-left: 18px;
+}
+.scan-list li {
+  margin-bottom: 4px;
+}
+
+.scan-entity.quarantined {
+  border-left: 3px solid var(--accent);
+}
+.scan-entity-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.scan-conf {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.scan-conf.high {
+  background: #e2efe6;
+  color: var(--ok);
+}
+.scan-conf.medium {
+  background: #efe3d8;
+  color: var(--accent);
+}
+.scan-conf.low {
+  background: var(--interviewer);
+  color: var(--muted);
+}
+
+.scan-claims {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+.scan-claim-head {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.scan-mark {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.scan-mark.yes {
+  color: var(--ok);
+}
+.scan-mark.no {
+  color: var(--muted);
+}
+.scan-span {
+  margin: 6px 0 0;
+  font-size: 14px;
+}
+.scan-source-link {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 12px;
+}
+.scan-claim-note {
+  margin: 4px 0 0;
+}
+.scan-sources {
+  margin-top: 12px;
+}
+.scan-sources.compact {
+  margin-top: 2px;
+  font-size: 13px;
+}
+.scan-longtail {
+  margin: 0;
+  padding-left: 18px;
+}
+.scan-longtail li {
+  margin-bottom: 8px;
+}
+.scan-audit {
+  margin-top: 28px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.scan-audit summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.scan-downloads {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.scan-dl {
+  display: inline-block;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+  text-decoration: none;
+  color: var(--ink);
+  background: var(--card);
+}
+.scan-dl:hover {
+  border-color: var(--muted);
+}

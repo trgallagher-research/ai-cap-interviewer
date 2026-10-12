@@ -1,0 +1,29 @@
+{
+  "name": "training-log-ingest",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ingests strength-training session files from a Google Drive inbox into the Training Master Google Sheet.",
+  "type": "module",
+  "scripts": {
+    "run": "tsx src/cli.ts run",
+    "watch": "tsx src/cli.ts watch",
+    "dry-run": "tsx src/cli.ts dry-run",
+    "validate": "tsx src/cli.ts validate",
+    "init-sheet": "tsx src/cli.ts init-sheet",
+    "recompute-targets": "tsx src/cli.ts recompute-targets",
+    "verify-access": "tsx src/cli.ts verify-access",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "google-auth-library": "^9.15.0",
+    "googleapis": "^144.0.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.0"
+  }
+}
