@@ -20,12 +20,29 @@ Reused (adapted, not copied verbatim, because the artifact has no server and no 
 | `lib/respondent.ts` streaming client and `Respondent.tsx` phases (landing → interviewing → complete), draft/resume idea, "I'd like to stop" flow | `src/member.js`, `src/store.js` | Rebuilt in vanilla JS; SSE replaced by `sample()`'s `onText`. |
 | `AGGREGATE_PUBLIC_SYSTEM` (lay-audience rewrite, "many people / a few", no percentages) | `buildSharebackPrompt` | Extended with a help map and "three things to try". |
 
-Not reused: Supabase persistence, auth, email, the studio, the scanner, voice. The artifact's `db`
+Not reused: Supabase persistence, auth, email, the studio, the scanner, voice (the artifact cannot use the microphone). The artifact's `db`
 capability and localStorage stand in for the database (see decision 3).
 
 ## 2. Design decisions
 
 Each with the reason and the alternatives rejected. **Check before showing her** is marked ★.
+
+### 2.0 Hybrid: a one-minute questionnaire, then a short interview ★
+*Changed after Tim tried the first version (2026-10-12).* The member first answers seven quick
+questions: how often they use AI, for what (the eight areas), which tools, how they feel about it,
+what the network could offer, whether they would pay, and whether they could show a colleague
+something. The interview then runs 4 to 7 questions, uses those answers to choose where to dig for
+one or two concrete episodes, never re-asks them, and offers quick-reply chips for narrowing
+questions. Ratings and feedback are unchanged.
+*Reason:* writing everything out was cumbersome, more so in a second language. The questionnaire
+takes over what a form does well (frequency, tools, stance, product preferences, which tally cleanly
+for her), and the interview keeps what only a conversation gets: evidence of practice and the
+material for tailored rating items. It also adds a third comparison for the organiser: what members
+ticked versus what they could give an example of.
+*Rejected:* a questionnaire only (practice would rest on self-report, the rating items would be
+generic, and the share-back would have no quotes); keeping the long interview (too much typing);
+voice input (artifacts cannot use the microphone; it belongs in the Vercel version, where the repo
+already has a voice button and transcription route).
 
 ### 2.1 What the interview measures: described practice and rated confidence, kept apart ★
 The interview draws out concrete episodes first and only then asks for confidence ratings, and the
