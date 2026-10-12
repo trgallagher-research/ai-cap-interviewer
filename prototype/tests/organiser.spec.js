@@ -166,7 +166,10 @@ function check(name, ok, extra) { if (ok) { passes++; console.log("  ok   " + na
   check("help map lists a helper", (await page.$$("#og-help .helpers li")).length >= 1);
   check("help map lists a seeker", (await page.$$("#og-help .seekers li")).length >= 1);
   check("help map says nobody for a seeker-only domain", (await page.textContent("#og-help")).includes("Nobody in the network yet"));
-  check("wants/offers/pay lists", (await page.$$("#og-signals .wants li")).length >= 3 && (await page.$$("#og-signals .offers li")).length >= 2 && (await page.$$("#og-signals .pay li")).length >= 2);
+  check("wants/offers/pay lists", (await page.$$("#og-signals .wants ul.full li")).length >= 3 && (await page.$$("#og-signals .offers ul.full li")).length >= 2 && (await page.$$("#og-signals .pay ul.full li")).length >= 2);
+  check("wants theme tally present", (await page.$$("#og-signals .wants ul.tally li")).length >= 2);
+  check("scatter labels every mark with a name", (await page.$$("#og-scatter text.lbl")).length === withMean);
+  check("heatmap gap line above table", (await page.textContent("#og-heat")).indexOf("Columns marked \"gap\"") < (await page.textContent("#og-heat")).indexOf("Member"));
   check("members list has N cards", (await page.$$("#og-members .og-member")).length === N);
   check("sample markers shown", (await page.$$("#og-members .og-sample-tag")).length === N);
   check("endedEarly marked", (await page.textContent("#og-members")).includes("stopped early"));
@@ -310,6 +313,12 @@ function check(name, ok, extra) { if (ok) { passes++; console.log("  ok   " + na
       check("real: heatmap rows = SEED.length (" + tag + ")", (await pg.$$("#og-heat tbody tr")).length === seedN);
       const ov = await pg.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
       check("real: no horizontal overflow (" + tag + ")", ov.sw <= ov.cw, JSON.stringify(ov));
+      if (vp.width > 600) {
+        check("real: pay list merges duplicates with a count (" + tag + ")", /\u00B7 [2-9] \u00B7/.test(await pg.textContent("#og-signals .pay")));
+        check("real: wants list collapsed with Show all (" + tag + ")", (await pg.$$("#og-signals .wants ul.full li")).length === 8 && (await pg.$("#og-signals .wants button")) !== null);
+        await pg.click("#og-signals .wants button");
+        check("real: Show all expands (" + tag + ")", (await pg.$$("#og-signals .wants ul.full li")).length > 8);
+      }
       await pg.screenshot({ path: path.join(SHOTS, "real-organiser-" + tag + ".png"), fullPage: true });
       await pg.click("#og-members .og-member");
       await pg.waitForSelector("#og-drawer"); await pg.waitForTimeout(300);

@@ -131,6 +131,7 @@
 .og-chart .grid { stroke: var(--line); stroke-width: 1; }
 .og-chart text { fill: var(--fg-2); font-size: 12px; }
 .og-chart text.tick { fill: var(--muted); font-size: 11px; }
+.og-chart text.lbl { fill: var(--fg-2); font-size: 11px; pointer-events: none; }
 .og-chart text.axisname { fill: var(--fg-2); font-size: 12px; }
 .og-chart .band { fill: var(--og-band); }
 .og-chart .bandline { stroke: var(--accent); stroke-width: 1; opacity: .5; }
@@ -181,6 +182,8 @@
 .og-list .sub { color: var(--muted); font-size: .8rem; margin-bottom: .5rem; }
 .og-list ul { margin: 0; padding-left: 1.1rem; display: grid; gap: .3rem; font-size: .9rem; }
 .og-list li small { color: var(--muted); }
+.og-list ul.tally { margin-bottom: .2rem; }
+.og-list ul.tally li { color: var(--fg); }
 .og-list .empty { color: var(--muted); font-size: .9rem; }
 .og-product { margin-top: .75rem; }
 .og-product .actions { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; margin: .5rem 0; }
@@ -476,11 +479,13 @@
 
     const dots = svg("g", { class: "dots" });
     const withMean = profiles.filter((p) => meanOf(p) !== null);
+    const placed = [];
     withMean.forEach((p) => {
       const lv = levelOf(p); const mean = meanOf(p); const kind = kindOf(p);
       const jx = (hash(p.id + "x") - 0.5) * (bandW - 28);
       const jy = (hash(p.id + "y") - 0.5) * 6;
       const cx = xc(lv) + jx, cy = Math.min(m.t + ph - 6, Math.max(m.t + 6, yv(mean) + jy));
+      placed.push({ cx, cy, lv, kind, name: p.member.name });
       const g = svg("g", { class: `dot k-${kind}${isSample(p) ? " sample" : ""}`, tabindex: "0", role: "button", "data-id": p.id, "aria-label": `${p.member.name}, ${p.member.role}: ${levelLabel(lv)}, confidence ${mean}. ${KIND_LABEL[kind]}. Opens details.` });
       g.appendChild(svg("circle", { cx, cy, r: 14, class: "hit" }));
       const r = 6;
@@ -498,6 +503,22 @@
       dots.appendChild(g);
     });
     chart.appendChild(dots);
+    // Name labels: to the right of each mark, nudged apart within a level band; narrow view labels only diverging marks.
+    const labels = svg("g", { class: "labels", "aria-hidden": "true" });
+    const LH = narrow ? 11 : 12;
+    for (let lv = 0; lv < 5; lv++) {
+      const inBand = placed.filter((d) => d.lv === lv && (!narrow || d.kind !== "aligned")).sort((a, b) => a.cy - b.cy);
+      let lastY = -Infinity;
+      inBand.forEach((d) => {
+        let ly = Math.max(d.cy + 4, lastY + LH);
+        if (ly > m.t + ph - 2) ly = m.t + ph - 2;
+        lastY = ly;
+        const estW = d.name.length * (narrow ? 5.6 : 6.4);
+        const right = d.cx + 10 + estW <= W - m.r;
+        labels.appendChild(svg("text", { x: right ? d.cx + 10 : d.cx - 10, y: ly, "text-anchor": right ? "start" : "end", class: "lbl" }, d.name));
+      });
+    }
+    chart.appendChild(labels);
     return chart;
   }
 
@@ -552,7 +573,8 @@
       "A filled cell means the member described using AI for that kind of work; hover or tab to a cell to read what they said. " +
       "Columns marked \"gap\" have fewer than two members who use AI routinely or better for that kind of work, so there is little in-house knowledge to draw on there." +
       (gapNames.length ? ` Gaps right now: ${gapNames.join(", ")}.` : " There are no gaps right now."));
-    return sectionEl("heat", "Who knows what", "Each row is a member, each column a kind of work. Scroll sideways on a phone.", el("div", null, [wrap, ramp, caption]));
+    const above = el("p", { class: "og-note", style: { marginBottom: ".5rem" } }, "Columns marked \"gap\" have fewer than two members who use AI routinely or better for that kind of work.");
+    return sectionEl("heat", "Who knows what", "Each row is a member, each column a kind of work. Scroll sideways on a phone.", el("div", null, [above, wrap, ramp, caption]));
   }
 
   function helpSection(profiles, openDetail) {
@@ -584,31 +606,82 @@
     const caption = el("p", { class: "og-caption" }, "Helpers are members whose AI use is woven into their method or who shape it for others, with evidence in that kind of work. Seekers are members who said they want to get better at something that sounds like it.");
     return sectionEl("help", "Who could help whom", "Pairings the organiser could make, grouped by kind of work.", el("div", null, [grid, caption]));
   }
-  const WANT_KW = {
-    writing: ["writ", "email", "proposal", "report", "post", "text"],
+  // Mirrors WANT_KEYWORDS in engine.js (not exported); Engine.WANT_KEYWORDS is used when present.
+  const WANT_KW_LOCAL = {
+    writing: ["writ", "email", "proposal", "report", "linkedin", "newsletter"],
     prep: ["prepar", "workshop", "session", "design", "programme", "training", "intervention"],
     analysis: ["analy", "summar", "interview", "survey", "pattern", "data", "document"],
     thinking: ["think", "case", "sparring", "reflect", "hypothes", "sounding"],
-    client: ["client", "in the room", "team", "live", "with a group"],
-    learning: ["learn", "research", "theory", "method", "course", "read"],
-    admin: ["admin", "plan", "schedul", "invoice", "notes", "organis", "translat"],
+    client: ["client", "in the room", "live with", "with a group", "with teams", "in front of"],
+    learning: ["research", "theory", "literature", "course", "reading", "keep up"],
+    admin: ["admin", "schedul", "invoice", "notes", "organis", "translat", "minutes"],
     building: ["build", "prompt", "automat", "tool", "gpt", "project", "script", "template"],
   };
-  function matchesDomain(want, key) { const w = String(want).toLowerCase(); return (WANT_KW[key] || []).some((k) => w.includes(k)); }
+  function wantKw() { return (E() && E().WANT_KEYWORDS) || WANT_KW_LOCAL; }
+  function matchesDomain(want, key) { const w = String(want).toLowerCase(); return (wantKw()[key] || []).some((k) => w.includes(k)); }
+  const SAFETY_RE = /safe|confidential|data|rules|anonymis/i;
+  /** Theme tally for wants/offers: safety theme first, then a domain by keyword, else "other". */
+  function themeTally(items) {
+    const counts = { safety: 0, other: 0 }; P().DOMAINS.forEach((d) => { counts[d.key] = 0; });
+    items.forEach((t) => {
+      if (SAFETY_RE.test(t)) { counts.safety++; return; }
+      const d = P().DOMAINS.find((x) => matchesDomain(t, x.key));
+      counts[d ? d.key : "other"]++;
+    });
+    const rows = [{ label: "Safe use of client material", n: counts.safety }]
+      .concat(P().DOMAINS.map((d) => ({ label: d.label, n: counts[d.key] })))
+      .concat([{ label: "Other", n: counts.other }])
+      .filter((r) => r.n > 0);
+    rows.sort((a, b) => b.n - a.n);
+    return rows;
+  }
+  function normKey(t) { return String(t).trim().toLowerCase().replace(/[\s.;:!,]+$/g, ""); }
 
   function signalsSection(profiles, stats) {
-    const list = (title, sub, pick, cls) => {
+    const nameOf = (p) => p.member.name + (isSample(p) ? " (sample)" : "");
+    const LIMIT = 8;
+    const grouped = (title, sub, pick, cls) => {
       const items = [];
       profiles.forEach((p) => pick(p).forEach((t) => items.push({ t, p })));
-      return el("div", { class: "og-list " + cls }, [
-        el("h3", null, title), el("div", { class: "sub" }, sub),
-        items.length ? el("ul", null, items.map((it) => el("li", null, [it.t, " ", el("small", null, it.p.member.name + (isSample(it.p) ? " (sample)" : ""))]))) : el("p", { class: "empty" }, "Nothing yet."),
-      ]);
+      const box = el("div", { class: "og-list " + cls }, [el("h3", null, title), el("div", { class: "sub" }, sub)]);
+      if (!items.length) { box.appendChild(el("p", { class: "empty" }, "Nothing yet.")); return box; }
+      const tally = themeTally(items.map((i) => i.t));
+      box.appendChild(el("div", { class: "eyebrow" }, "By theme"));
+      box.appendChild(el("ul", { class: "tally" }, tally.map((r) => el("li", null, [r.label, " ", el("small", null, "\u00B7 " + r.n)]))));
+      box.appendChild(el("div", { class: "eyebrow", style: { marginTop: ".6rem" } }, `All ${items.length}`));
+      const ul = el("ul", { class: "full" });
+      const draw = (all) => {
+        ul.textContent = "";
+        (all ? items : items.slice(0, LIMIT)).forEach((it) => ul.appendChild(el("li", null, [it.t, " ", el("small", null, nameOf(it.p))])));
+      };
+      draw(false);
+      box.appendChild(ul);
+      if (items.length > LIMIT) {
+        let open = false;
+        const more = el("button", { class: "btn quiet", type: "button", style: { padding: ".2rem .4rem", marginTop: ".3rem" } }, `Show all ${items.length}`);
+        more.addEventListener("click", () => { open = !open; draw(open); more.textContent = open ? "Show fewer" : `Show all ${items.length}`; });
+        box.appendChild(more);
+      }
+      return box;
+    };
+    const pay = () => {
+      const groups = new Map();
+      profiles.forEach((p) => {
+        const t = p.productSignals && p.productSignals.wouldPayFor; if (!t) return;
+        const k = normKey(t);
+        if (!groups.has(k)) groups.set(k, { text: String(t).trim().replace(/[\s.;:!,]+$/g, ""), names: [] });
+        groups.get(k).names.push(nameOf(p));
+      });
+      const rows = Array.from(groups.values()).sort((a, b) => b.names.length - a.names.length || a.text.localeCompare(b.text));
+      const box = el("div", { class: "og-list pay" }, [el("h3", null, "Would pay for"), el("div", { class: "sub" }, "What members said would be worth their time or money; the same answer from several members is one line with a count")]);
+      if (!rows.length) { box.appendChild(el("p", { class: "empty" }, "Nothing yet.")); return box; }
+      box.appendChild(el("ul", { class: "full" }, rows.map((r) => el("li", null, [r.text, " ", el("small", null, "\u00B7 " + r.names.length + " \u00B7 " + r.names.join(", "))]))));
+      return box;
     };
     const cols = el("div", { class: "og-cols" }, [
-      list("Wants", "What members said they want to get better at", (p) => p.wants || [], "wants"),
-      list("Offers", "What members said they could show a colleague", (p) => p.offers || [], "offers"),
-      list("Would pay for", "What members said would be worth their time or money", (p) => (p.productSignals && p.productSignals.wouldPayFor) ? [p.productSignals.wouldPayFor] : [], "pay"),
+      grouped("Wants", "What members said they want to get better at", (p) => p.wants || [], "wants"),
+      grouped("Offers", "What members said they could show a colleague", (p) => p.offers || [], "offers"),
+      pay(),
     ]);
     const product = productCard(profiles, stats);
     return sectionEl("signals", "Wants, offers and what they would pay for", "The raw material for deciding whether there is something to offer, and to whom.", el("div", null, [cols, product]));

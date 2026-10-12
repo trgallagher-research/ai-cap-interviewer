@@ -396,7 +396,7 @@
    * members who named a want matching the domain (by keyword) or have no evidence there and are level <= 1 are seekers.
    */
   const WANT_KEYWORDS = {
-    writing: ["writ", "email", "proposal", "report", "post", "text"],
+    writing: ["writ", "email", "proposal", "report", "linkedin", "newsletter"],
     prep: ["prepar", "workshop", "session", "design", "programme", "training", "intervention"],
     analysis: ["analy", "summar", "interview", "survey", "pattern", "data", "document"],
     thinking: ["think", "case", "sparring", "reflect", "hypothes", "sounding"],

@@ -205,14 +205,15 @@ async function fullFlow(page, tag, opts = {}) {
     localStorage.removeItem("aiwd.profiles");
     const r = Store.importCode(code);
     const back = JSON.parse(localStorage.getItem("aiwd.profiles"));
-    const orig = JSON.parse(code.slice(6));
-    return { ok: r.imported.length === 1 && back.length === 1 && back[0].id === orig.id && back[0].source === "imported" && back[0].transcript.length === orig.transcript.length, why: JSON.stringify(r).slice(0, 100) };
+    const orig = Store.parseCodes(code)[0];
+    const visibleLeak = /levelLabel|"level"|divergence/.test(code);
+    return { ok: !visibleLeak && r.imported.length === 1 && back.length === 1 && back[0].id === orig.id && back[0].source === "imported" && back[0].transcript.length === orig.transcript.length, why: JSON.stringify(r).slice(0, 100) };
   });
   check("export code round-trips through Store.importCode (" + tag + ")", rt.ok, rt.why);
   // Multi-code import and bare array
   const multi = await page.evaluate(() => {
     const code = document.getElementById("result-code").value;
-    const p2 = Object.assign(JSON.parse(code.slice(6)), { id: "p_other" });
+    const p2 = Object.assign(Store.parseCodes(code)[0], { id: "p_other" });
     localStorage.removeItem("aiwd.profiles");
     const r = Store.importCode(code + "\n" + Store.exportCode(p2));
     const r2 = Store.importCode(JSON.stringify([Object.assign({}, p2, { id: "p_three" })]));

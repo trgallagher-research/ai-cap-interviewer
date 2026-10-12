@@ -105,8 +105,21 @@
   // ---------------------------------------------------------------------------
   // Export / import codes (the paste bridge when db is unavailable)
   // ---------------------------------------------------------------------------
+  // The code is base64 of the JSON (UTF-8 safe) so the member cannot casually read the
+  // organiser-only coding (practice level, divergence) on their own feedback screen.
+  function encodeB64(str) {
+    const bytes = new TextEncoder().encode(str);
+    let bin = ""; for (const b of bytes) bin += String.fromCharCode(b);
+    return btoa(bin);
+  }
+  function decodeB64(b64) {
+    const bin = atob(b64.replace(/\s+/g, ""));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder().decode(bytes);
+  }
   function exportCode(profile) {
-    return CODE_PREFIX + JSON.stringify(profile);
+    return CODE_PREFIX + encodeB64(JSON.stringify(profile));
   }
 
   /**
@@ -130,7 +143,11 @@
       const start = idx + CODE_PREFIX.length;
       const nextIdx = s.indexOf(CODE_PREFIX, start);
       const chunk = (nextIdx === -1 ? s.slice(start) : s.slice(start, nextIdx)).trim();
-      const v = tryJson(chunk) || tryJson(chunk.slice(0, chunk.lastIndexOf("}") + 1));
+      let v = tryJson(chunk) || tryJson(chunk.slice(0, chunk.lastIndexOf("}") + 1));
+      if (!v) { // base64 form (current); tolerate trailing prose after the code
+        const m = chunk.match(/^[A-Za-z0-9+/=]+/);
+        if (m) { try { v = tryJson(decodeB64(m[0])); } catch (_) { v = null; } }
+      }
       if (Array.isArray(v)) found.push(...v); else if (v) found.push(v);
       idx = nextIdx;
     }
