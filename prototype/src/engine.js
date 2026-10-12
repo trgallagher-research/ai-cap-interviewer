@@ -138,11 +138,28 @@
     return Math.min(hi, Math.max(lo, n));
   }
 
+  /** Optional quick replies: 2–4 short strings, or null. */
+  function parseChips(full) {
+    const i = full.indexOf(M.CHIPS_OPEN);
+    if (i === -1) return null;
+    const j = full.indexOf(M.CLOSE, i + M.CHIPS_OPEN.length);
+    if (j === -1) return null;
+    const raw = full.slice(i + M.CHIPS_OPEN.length, j);
+    const a = raw.indexOf("["); const b = raw.lastIndexOf("]");
+    if (a === -1 || b === -1) return null;
+    let arr;
+    try { arr = JSON.parse(raw.slice(a, b + 1)); } catch (_) { return null; }
+    if (!Array.isArray(arr)) return null;
+    const chips = arr.map((x) => String(x || "").trim()).filter((x) => x && x.length <= 60);
+    return chips.length >= 2 ? chips.slice(0, 4) : null;
+  }
+
   function parseTurn(full) {
     return {
       visible: full.split("<<")[0].trim(),
       phase: parsePhase(full),
       rateItems: parseRate(full),
+      chips: parseChips(full),
       complete: full.includes(M.COMPLETE),
     };
   }
@@ -150,12 +167,13 @@
   // ---------------------------------------------------------------------------
   // Interview state machine
   // ---------------------------------------------------------------------------
-  const LIMITS = { maxQuestionsBeforeRate: 16, minQuestionsBeforeRate: 6, maxAfterRate: 2, maxForcedRateAttempts: 2 };
+  const LIMITS = { maxQuestionsBeforeRate: 9, minQuestionsBeforeRate: 3, maxAfterRate: 2, maxForcedRateAttempts: 2 };
 
   /** Interview holds the transcript and drives one turn at a time. UI-agnostic. */
   class Interview {
-    constructor(member) {
+    constructor(member, answers) {
       this.member = { name: (member.name || "").trim(), role: (member.role || "").trim() };
+      this.answers = answers || null; // opening questionnaire (see Prompts.QUESTIONNAIRE)
       this.turns = [];            // {role:"interviewer"|"member", text}
       this.phase = "orient";
       this.rateItems = null;      // proposed self-efficacy items
@@ -211,7 +229,7 @@
       const endNow = !!opts.endNow;
       let nudge = endNow ? "" : this._nudge();
       if (opts.nudge) nudge = opts.nudge;
-      const messages = P.interviewMessages(this.member, this.turns, { endNow, nudge });
+      const messages = P.interviewMessages(this.member, this.turns, { endNow, nudge, answers: this.answers });
       let full = "";
       const res = await llm.chat(messages, {
         tier: "default",
@@ -225,7 +243,7 @@
       if (!endNow && !this.ratings && parsed.phase === "rate" && !parsed.rateItems && this.rateRetries < 1) {
         this.rateRetries++;
         this.turns.push({ role: "interviewer", text: parsed.visible });
-        const retryMsgs = P.interviewMessages(this.member, this.turns, { nudge: P.NUDGES.missingRate });
+        const retryMsgs = P.interviewMessages(this.member, this.turns, { nudge: P.NUDGES.missingRate, answers: this.answers });
         this.turns.pop();
         const r2 = await llm.chat(retryMsgs, { tier: "default", cache: false, onText: (t) => { if (onText) onText(safeVisible(t)); } });
         const p2 = parseTurn(r2.text || "");
@@ -252,15 +270,17 @@
       if (this.ratings && this.afterRateCount > LIMITS.maxAfterRate && this.status === "in_progress") {
         this.status = "complete"; this.phase = "close";
       }
-      return { visible, phase: this.phase, rateItems: this.status === "rating" ? this.rateItems : null, complete: this.status === "complete" || this.status === "ended_early" };
+      const done = this.status === "complete" || this.status === "ended_early";
+      this.chips = (!done && this.status !== "rating" && parsed.chips) ? parsed.chips : null;
+      return { visible, phase: this.phase, rateItems: this.status === "rating" ? this.rateItems : null, chips: this.chips, complete: done };
     }
 
     /** Snapshot for persistence / resume. */
     toJSON() {
-      return { member: this.member, turns: this.turns, phase: this.phase, rateItems: this.rateItems, ratings: this.ratings, status: this.status, interviewerCount: this.interviewerCount, afterRateCount: this.afterRateCount, rateRetries: this.rateRetries, forcedRateAttempts: this.forcedRateAttempts, startedAt: this.startedAt };
+      return { member: this.member, answers: this.answers, chips: this.chips || null, turns: this.turns, phase: this.phase, rateItems: this.rateItems, ratings: this.ratings, status: this.status, interviewerCount: this.interviewerCount, afterRateCount: this.afterRateCount, rateRetries: this.rateRetries, forcedRateAttempts: this.forcedRateAttempts, startedAt: this.startedAt };
     }
     static fromJSON(o) {
-      const iv = new Interview(o.member || {});
+      const iv = new Interview(o.member || {}, o.answers || null);
       Object.assign(iv, o); if (typeof iv.rateRetries !== 'number') iv.rateRetries = 0; if (typeof iv.forcedRateAttempts !== 'number') iv.forcedRateAttempts = 0;
       return iv;
     }
@@ -329,6 +349,25 @@
     return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
   }
 
+  /** The profile request for a finished interview (questionnaire + transcript + ratings). */
+  function profileMessages(interview) {
+    return [{ role: "user", content: P.buildProfilePrompt(interview.member, interview.turns, interview.rateItems, interview.ratings, interview.answers) }];
+  }
+
+  /** Product signals come from the questionnaire's fixed options so they tally cleanly. */
+  function signalsFromAnswers(a) {
+    const out = { offerKeys: [], pay: "", wouldPayFor: "" };
+    if (!a) return out;
+    const keys = (Array.isArray(a.offer) ? a.offer : []).filter((k) => k !== "nothing");
+    out.offerKeys = keys;
+    out.pay = a.pay || (Array.isArray(a.offer) && a.offer.includes("nothing") ? "no" : "");
+    const labels = keys.map((k) => P.optionLabel("offer", k));
+    if (a.offerOther) labels.push(a.offerOther);
+    if (out.pay === "yes" || out.pay === "maybe") out.wouldPayFor = labels.join("; ");
+    else if (Array.isArray(a.offer) && a.offer.includes("nothing")) out.wouldPayFor = "";
+    return out;
+  }
+
   function newId() { return "p_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
   /** Build the stored Profile from the interview + the model's JSON (see docs/architecture.md). */
@@ -340,7 +379,10 @@
     const mean = meanRating(interview.rateItems, interview.ratings);
     const validKeys = new Set(P.DOMAINS.map((d) => d.key));
     const domains = Array.isArray(pr.domains) ? pr.domains.filter((d) => d && validKeys.has(d.key)).map((d) => ({ key: d.key, evidence: String(d.evidence || "") })) : [];
-    const stance = P.STANCES.includes(pr.stance) ? pr.stance : "pragmatic";
+    const a = interview.answers || null;
+    // The member's own stance answer wins over the model's reading when present.
+    const stance = (a && P.STANCES.includes(a.stance)) ? a.stance : (P.STANCES.includes(pr.stance) ? pr.stance : "pragmatic");
+    const sig = signalsFromAnswers(a);
     const fb = m.feedback || {};
     return {
       id: newId(),
@@ -351,7 +393,7 @@
         level, levelLabel: P.LADDER[level].label,
         summary: String(pr.summary || ""),
         domains,
-        tools: Array.isArray(pr.tools) ? pr.tools.map(String) : [],
+        tools: Array.isArray(pr.tools) && pr.tools.length ? pr.tools.map(String) : ((a && Array.isArray(a.tools) && a.frequency !== "never") ? a.tools.slice() : []),
         judgement: String(pr.judgement || ""),
         stance,
       },
@@ -359,7 +401,14 @@
       divergence: divergenceFor(level, interview.rateItems, interview.ratings),
       wants: Array.isArray(m.wants) ? m.wants.map(String).slice(0, 3) : [],
       offers: Array.isArray(m.offers) ? m.offers.map(String).slice(0, 2) : [],
-      productSignals: { wouldPayFor: String((m.productSignals && m.productSignals.wouldPayFor) || ""), quote: String((m.productSignals && m.productSignals.quote) || "") },
+      productSignals: { wouldPayFor: a ? sig.wouldPayFor : String((m.productSignals && m.productSignals.wouldPayFor) || ""), offerKeys: sig.offerKeys, pay: sig.pay, quote: String((m.productSignals && m.productSignals.quote) || "") },
+      questionnaire: a,
+      selfReport: a ? {
+        frequency: a.frequency || "",
+        domains: (a.frequency === "never" || !Array.isArray(a.uses)) ? [] : a.uses.filter((k) => validKeys.has(k)),
+        tools: (a.frequency === "never" || !Array.isArray(a.tools)) ? [] : a.tools.slice().concat(a.toolsOther ? [a.toolsOther] : []),
+        canShow: a.canShow || "",
+      } : null,
       feedback: {
         headline: String(fb.headline || ("Thanks " + (interview.member.name || "") + ", here is what stood out")),
         summary: String(fb.summary || ""),
@@ -393,12 +442,30 @@
       (p.offers || []).forEach((o) => offers.push(o));
       if (p.productSignals && p.productSignals.wouldPayFor) pay.push(p.productSignals.wouldPayFor);
     }
+    const q = { frequency: {}, offer: {}, pay: { yes: 0, maybe: 0, no: 0 }, selfDomains: {}, claimedNoEpisode: {}, answered: 0 };
+    (P.QUESTIONNAIRE.frequency.options).forEach((o) => { q.frequency[o.key] = 0; });
+    (P.QUESTIONNAIRE.offer.options).forEach((o) => { q.offer[o.key] = 0; });
+    P.DOMAINS.forEach((d) => { q.selfDomains[d.key] = 0; q.claimedNoEpisode[d.key] = 0; });
+    for (const p of profiles) {
+      const sr = p.selfReport; const ps = p.productSignals || {};
+      if (!sr) continue;
+      q.answered++;
+      if (q.frequency[sr.frequency] !== undefined) q.frequency[sr.frequency]++;
+      for (const k of sr.domains || []) {
+        if (q.selfDomains[k] === undefined) continue;
+        q.selfDomains[k]++;
+        if (!(p.practice.domains || []).some((d) => d.key === k)) q.claimedNoEpisode[k]++;
+      }
+      const qa = p.questionnaire || {};
+      for (const k of (Array.isArray(qa.offer) ? qa.offer : [])) if (q.offer[k] !== undefined) q.offer[k]++;
+      if (ps.pay && q.pay[ps.pay] !== undefined) q.pay[ps.pay]++;
+    }
     const meanConfidence = means.length ? Math.round(means.reduce((a, b) => a + b, 0) / means.length) : null;
     // Domain gaps: domains where fewer than 2 members at level >= 2 show evidence.
     const strongByDomain = {};
     P.DOMAINS.forEach((d) => { strongByDomain[d.key] = profiles.filter((p) => p.practice.level >= 2 && (p.practice.domains || []).some((x) => x.key === d.key)).length; });
     const gaps = P.DOMAINS.filter((d) => strongByDomain[d.key] < 2).map((d) => d.key);
-    return { n: profiles.length, byLevel, byDomain, strongByDomain, gaps, byStance, byDivergence, meanConfidence, wants, offers, wouldPayFor: pay };
+    return { n: profiles.length, questionnaire: q, byLevel, byDomain, strongByDomain, gaps, byStance, byDivergence, meanConfidence, wants, offers, wouldPayFor: pay };
   }
 
   /**
@@ -427,5 +494,5 @@
     return out;
   }
 
-  window.Engine = { llm, Interview, LIMITS, WANT_KEYWORDS, safeVisible, parseTurn, parseRate, parsePhase, tryParseJson, band, divergence, divergenceFor, meanRating, assembleProfile, stats, helpMap, newId, EXPECTED, TOL };
+  window.Engine = { llm, Interview, LIMITS, WANT_KEYWORDS, parseChips, profileMessages, signalsFromAnswers, safeVisible, parseTurn, parseRate, parsePhase, tryParseJson, band, divergence, divergenceFor, meanRating, assembleProfile, stats, helpMap, newId, EXPECTED, TOL };
 })();

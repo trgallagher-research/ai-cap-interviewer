@@ -125,3 +125,33 @@ mean > expected+18 → `confident-starter`; mean < expected−18 → `cautious-p
   "copy your result code → organiser pastes it" bridge when db is unavailable.
 - db rules: `{path:"profiles", read:"admin", write:"interact"}` — contributors write, only editors/owner read.
 - Seed profiles never enter storage; the organiser view merges `SEED` in when "Show sample members" is on (default on, clearly labelled).
+
+## Hybrid flow (added 2026-10-12, second iteration)
+
+The member flow is now: landing → **opening questionnaire** (about one minute) → **short interview**
+(4 to 7 questions, then ratings) → ratings → feedback.
+
+- Questionnaire definition lives in `Prompts.QUESTIONNAIRE` / `Prompts.QUESTION_ORDER` (data only, no DOM).
+  Questions: `frequency` (single, required), `uses` (multi over the 8 domain keys; skipped if frequency is
+  never), `tools` (multi + free-text `toolsOther`; skipped if never), `stance` (single, required; keys are
+  the 5 STANCES), `offer` (multi + `offerOther`; `nothing` is exclusive), `pay` (single; skipped if offer
+  includes nothing), `canShow` (single; skipped if never or tried). `Prompts.questionSkipped(qid, answers)`
+  decides skips. Answers object: `{frequency, uses[], tools[], toolsOther, stance, offer[], offerOther, pay, canShow}`.
+- `new Engine.Interview(member, answers)`; the interviewer prompt gets the answers, never re-asks them,
+  and digs for episodes in the ticked areas. Non-users (`frequency: never`) get a separate short path.
+- New optional marker on any question: `<<CHIPS: ["This week","This month","Longer ago"] >>`
+  (2–4 quick replies). `Interview.next()` resolves `{..., chips}`; the page shows them as tappable
+  buttons that send the text as the member's answer; typing still works.
+- Limits: forced rating after 9 interviewer turns (was 16).
+- Profile request: `Engine.profileMessages(interview)` (includes the answers).
+
+Profile additions (assembled by the engine; seed profiles must carry them too):
+```jsonc
+"questionnaire": { ...answers object... } | null,
+"selfReport": { "frequency": "weekly", "domains": ["writing","prep"], "tools": ["ChatGPT"], "canShow": "yes" } | null,
+"productSignals": { "wouldPayFor": "labels joined with '; ' when pay is yes/maybe, else ''",
+                    "offerKeys": ["peer-halfday", ...], "pay": "yes|maybe|no|''", "quote": "…" }
+```
+`practice.stance` now takes the member's own questionnaire answer. `practice.domains` stay evidence-gated:
+a ticked area with no episode is NOT a domain. `Engine.stats(...).questionnaire` adds
+`{frequency:{key:n}, offer:{key:n}, pay:{yes,maybe,no}, selfDomains:{key:n}, claimedNoEpisode:{key:n}, answered}`.

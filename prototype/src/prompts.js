@@ -44,11 +44,126 @@
   const MARK = {
     PHASE_OPEN: "<<PHASE:",
     RATE_OPEN: "<<RATE:",
+    CHIPS_OPEN: "<<CHIPS:",
     CLOSE: ">>",
     COMPLETE: "<<COMPLETE>>",
   };
 
   const PHASES = ["orient", "practice", "stretch", "rate", "close"];
+
+  // ---------------------------------------------------------------------------
+  // 0. Opening questionnaire (about one minute). Self-report: it routes the interview and
+  //    fills the map's skeleton, but practice is still coded from described episodes.
+  // ---------------------------------------------------------------------------
+
+  const QUESTIONNAIRE = {
+    frequency: {
+      id: "frequency", type: "single", required: true,
+      label: "How often does an AI tool (ChatGPT, Copilot, Claude, Gemini or similar) show up in your work?",
+      options: [
+        { key: "never",   label: "Never" },
+        { key: "tried",   label: "I have tried it a few times" },
+        { key: "monthly", label: "Now and then, a few times a month" },
+        { key: "weekly",  label: "Most weeks" },
+        { key: "daily",   label: "Most days" },
+      ],
+    },
+    uses: {
+      id: "uses", type: "multi", skipIf: { frequency: ["never"] },
+      label: "What have you used it for in your work? Tick all that apply.",
+      options: DOMAINS.map((d) => ({ key: d.key, label: d.label, hint: d.hint })),
+    },
+    tools: {
+      id: "tools", type: "multi", skipIf: { frequency: ["never"] }, other: true,
+      label: "Which tools?",
+      options: [
+        { key: "ChatGPT", label: "ChatGPT" },
+        { key: "Microsoft Copilot", label: "Microsoft Copilot" },
+        { key: "Claude", label: "Claude" },
+        { key: "Gemini", label: "Gemini" },
+        { key: "NotebookLM", label: "NotebookLM" },
+        { key: "Perplexity", label: "Perplexity" },
+        { key: "Transcription tool", label: "A transcription tool (Otter, Teams, Zoom)" },
+      ],
+    },
+    stance: {
+      id: "stance", type: "single", required: true,
+      label: "Which comes closest to how you feel about AI in your work?",
+      options: [
+        { key: "enthusiast", label: "Keen: I want to do more with it" },
+        { key: "pragmatic",  label: "Practical: useful for some things, not others" },
+        { key: "cautious",   label: "Careful: I use it, with reservations" },
+        { key: "sceptical",  label: "Doubtful: not convinced it helps my kind of work" },
+        { key: "worried",    label: "Uneasy: I worry about what it does" },
+      ],
+    },
+    offer: {
+      id: "offer", type: "multi", other: true,
+      label: "If the network offered something on AI, what would be worth your time? Tick any.",
+      options: [
+        { key: "peer-halfday",   label: "A half-day with peers from this network" },
+        { key: "one-to-one",     label: "An hour with someone looking at how I work" },
+        { key: "confidentiality", label: "A checklist for using it safely with client material" },
+        { key: "prompt-library", label: "A shared library of prompts from colleagues" },
+        { key: "demos",          label: "Short demos from colleagues" },
+        { key: "nothing",        label: "Nothing for now", exclusive: true },
+      ],
+    },
+    pay: {
+      id: "pay", type: "single", skipIf: { offer: ["nothing"] },
+      label: "Would you pay for something like that?",
+      options: [
+        { key: "yes",   label: "Yes, if it fits my work" },
+        { key: "maybe", label: "Maybe, depending on price" },
+        { key: "no",    label: "No" },
+      ],
+    },
+    canShow: {
+      id: "canShow", type: "single", skipIf: { frequency: ["never", "tried"] },
+      label: "Is there something you do with AI that you could show a colleague?",
+      options: [
+        { key: "yes",   label: "Yes" },
+        { key: "maybe", label: "Maybe" },
+        { key: "no",    label: "Not really" },
+      ],
+    },
+  };
+  const QUESTION_ORDER = ["frequency", "uses", "tools", "stance", "offer", "pay", "canShow"];
+
+  /** True when a question should be skipped given the answers so far. */
+  function questionSkipped(qid, answers) {
+    const q = QUESTIONNAIRE[qid];
+    if (!q || !q.skipIf) return false;
+    return Object.keys(q.skipIf).some((dep) => {
+      const v = answers ? answers[dep] : undefined;
+      const vals = Array.isArray(v) ? v : (v ? [v] : []);
+      return vals.some((x) => q.skipIf[dep].includes(x));
+    });
+  }
+
+  function optionLabel(qid, key) {
+    const q = QUESTIONNAIRE[qid];
+    const o = q && q.options.find((x) => x.key === key);
+    return o ? o.label : key;
+  }
+
+  /** Plain-text summary of the questionnaire for the interviewer and profile prompts. */
+  function formatQuestionnaire(a) {
+    if (!a) return "(no questionnaire answers)";
+    const lines = [];
+    for (const qid of QUESTION_ORDER) {
+      const q = QUESTIONNAIRE[qid];
+      if (questionSkipped(qid, a)) continue;
+      const v = a[qid];
+      let txt;
+      if (Array.isArray(v)) txt = v.length ? v.map((k) => optionLabel(qid, k)).join("; ") : "(none ticked)";
+      else txt = v ? optionLabel(qid, v) : "(not answered)";
+      const other = a[qid + "Other"];
+      if (other) txt += (txt ? "; " : "") + "other: " + other;
+      lines.push(`- ${q.label} ${txt}`);
+    }
+    return lines.join("\n");
+  }
 
   // ---------------------------------------------------------------------------
   // 1. Interview
@@ -62,9 +177,10 @@
   }
 
   /** The interviewer's standing instructions. Sent once as the first user message. */
-  function buildInterviewSystem(member) {
+  function buildInterviewSystem(member, answers) {
     const name = (member && member.name) ? member.name.trim() : "the member";
     const role = (member && member.role) ? member.role.trim() : "a member of the network";
+    const nonUser = answers && answers.frequency === "never";
     return `\
 You are conducting a one-to-one interview, in English, for the AI at Work Diagnostic run by \
 Systeeminterventies, a Dutch network of managers, advisers, trainers and coaches who work on \
@@ -95,37 +211,41 @@ with it, how they judged it, what went wrong. Episodes are the evidence; opinion
 as a checklist.
 - Short answers are fine. If an answer is two words, do not scold or repeat the question; narrow \
 it ("Was that this week or longer ago?") or offer a small menu of two or three possibilities to \
-react to. After two very short answers in a row, move to easier, more concrete ground.
+react to, as quick replies (see the CHIPS marker). After two very short answers in a row, move to \
+easier, more concrete ground.
 - Sceptics and non-users are as valuable as daily users. If ${name} has never used AI tools, or \
 distrusts them, treat that as the subject: where they have seen it used, what they have been \
 asked, what stops them, what they would need to see. Never try to convince them. Do not ask a \
 non-user to describe things they have not done.
 - Daily users should feel stretched: ask how they verify output, where it has misled them, how \
-they handle client confidentiality, what they do that colleagues could not yet do, where their \
-method has changed, what they still cannot get it to do.
-- Ask between 6 and 11 questions, then request the ratings. Go to the ratings as soon as you have \
-two concrete episodes (or, for a non-user, two concrete moments) and their edges; with a member who \
-answers in a few words, go earlier rather than later. Do not pad.
+they handle client confidentiality, what they do that colleagues could not yet do, what they \
+still cannot get it to do.
+- This is a SHORT interview: ask 4 to 7 questions, then request the ratings. The questionnaire \
+below already covers how often they use AI, for what, with which tools, how they feel about it, \
+and what they would value or pay for. Never ask those again. Your job is the part a \
+questionnaire cannot get: concrete episodes and where their edges are. Do not pad.
 
-# Ground to cover (adapt order and depth to the person)
-1. ORIENT: what their work consists of in a typical week; whether and how AI tools show up in \
-it at all. Decide early which path you are on: non-user, light user, regular user, advanced user.
-2. PRACTICE: two to four concrete recent episodes of using AI in their work, with specifics \
-(for non-users: moments they considered it or saw others use it, and what happened). Listen for \
-these areas, without naming them as a list to the member:
+# What ${name} said in the opening questionnaire (self-report; use it to choose where to dig)
+${formatQuestionnaire(answers)}
+
+# Ground to cover (adapt to the person)
+${nonUser ? `${name} has not used AI tools in their work. Ask about two concrete moments: one where \
+AI came up (a colleague, a client, an article, a tool their organisation introduced) and what \
+happened; then what stops them or what they would need to see to try it, taking the answer as it \
+comes. Then go to the ratings with first-step items.` : `1. PRACTICE: ask for the most recent real instance in the area they ticked that looks most \
+central to their work: what task, which tool, what they typed, what came back, what they did with \
+it. Probe once or twice for specifics. Then ask for one more episode, ideally in a different area \
+they ticked, or one where it went wrong. Listen for these areas, without naming them as a list:
 ${domainText()}
-3. STRETCH: their edges. How they check output, when they decide not to use AI, what they have \
-stopped trusting, what they would like to be able to do but cannot, what they would want to \
-learn next. Ask, once and only if it fits, what the network could offer on this that would be worth \
-their time. If they name something, ask separately whether they would pay for it. If the member has \
-expressed distrust of the exercise, ask only the first and accept a refusal. If they described \
-something they do with these tools, ask whether they could show it to a colleague; skip this for \
-non-users.
-4. RATE: the self-efficacy ratings (see below).
-5. CLOSE: one warm closing message. Say the feedback is being prepared. Do not summarise.
+2. STRETCH: one or two questions on their edges, chosen to fit what you heard: how they check \
+output, when they decide not to use AI, how they handle client material, what they would like to \
+be able to do but cannot.${answers && answers.canShow === "yes" ? ` They said they could show a \
+colleague something: ask once what it is, if it has not come up.` : ""}`}
+3. RATE: the self-efficacy ratings (see below).
+4. CLOSE: one warm closing message. Say the feedback is being prepared. Do not summarise.
 
 # Self-efficacy ratings (RATE phase)
-When you have enough concrete material (usually after 6 to 10 questions), write a short message \
+When you have enough concrete material (usually after 4 to 6 questions), write a short message \
 that says you would like them to rate their confidence on a few tasks drawn from what they \
 described, and that there are no right answers; then append a RATE marker (format below) with \
 3 to 5 task statements. Rules for the statements, following Bandura's guide for constructing \
@@ -159,22 +279,28 @@ ${MARK.RATE_OPEN} [{"id":"r1","task":"…","level":1},{"id":"r2","task":"…","l
 The rating request itself ends with ${MARK.PHASE_OPEN} rate ${MARK.CLOSE}; the message after the \
 ratings ends with ${MARK.PHASE_OPEN} close ${MARK.CLOSE}.
 Your final closing message also includes, on its own line: ${MARK.COMPLETE}
+Optionally, on a question where a small menu helps (narrowing a short answer, "this week or \
+longer ago", choosing between areas they ticked), add on its own line 2 to 4 short quick replies \
+as strictly valid JSON, each under 40 characters:
+${MARK.CHIPS_OPEN} ["This week", "This month", "Longer ago"] ${MARK.CLOSE}
+The member can tap one or still type. Never use chips on the rating request or the closing.
 Never use the "<<" sequence anywhere except in these markers. The member never sees the markers.
 
-Begin now: greet ${name} by name in one sentence, say in one sentence that this is a relaxed \
-conversation about how AI does or doesn't show up in their work, and ask your first open question.`;
+Begin now: greet ${name} by name in one sentence, say in one sentence that you would like to hear \
+${nonUser ? "how AI has or hasn't come up around their work" : "about a few real examples behind their answers"}, \
+and ask your first question.`;
   }
 
   /** Opening message list: system block + a kick-off user line. */
-  function openingMessages(member) {
+  function openingMessages(member, answers) {
     return [
-      { role: "user", content: buildInterviewSystem(member) + "\n\n[The interview begins now.]" },
+      { role: "user", content: buildInterviewSystem(member, answers) + "\n\n[The interview begins now.]" },
     ];
   }
 
   /** Convert the running transcript into the sample() message list. */
   function interviewMessages(member, turns, opts) {
-    const msgs = openingMessages(member);
+    const msgs = openingMessages(member, opts && opts.answers);
     for (const t of turns) {
       msgs.push({ role: t.role === "interviewer" ? "assistant" : "user", content: t.text });
     }
@@ -234,7 +360,7 @@ conversation about how AI does or doesn't show up in their work, and ask your fi
       .join("\n\n");
   }
 
-  function buildProfilePrompt(member, turns, items, ratings) {
+  function buildProfilePrompt(member, turns, items, ratings, answers) {
     const name = member.name || "the member";
     const ratingLines = (items || []).map((it) => {
       const r = ratings ? ratings[it.id] : undefined;
@@ -243,15 +369,19 @@ conversation about how AI does or doesn't show up in their work, and ask your fi
     return `\
 You are writing the profile for one member who has just finished the AI at Work Diagnostic \
 interview for Systeeminterventies (a Dutch network of managers, advisers, trainers and coaches \
-working on collaboration and conflict in organisations). You are given only their transcript \
-and their self-efficacy ratings. Produce ONE JSON object and nothing else: no prose before or \
+working on collaboration and conflict in organisations). You are given their opening \
+questionnaire, their interview transcript and their self-efficacy ratings. Produce ONE JSON object and nothing else: no prose before or \
 after, no code fences.
 
 Member: ${name}, role: "${member.role || "unknown"}".
 
+# Their opening questionnaire (self-report)
+${formatQuestionnaire(answers)}
+
 # Two separate readings: described practice and rated confidence
-Code PRACTICE from what they DESCRIBED doing (episodes, specifics, judgement), never from the \
-ratings or from how they talk about themselves. Use this ladder; pick the highest level that the \
+Code PRACTICE from what they DESCRIBED doing in the interview (episodes, specifics, judgement), \
+never from the questionnaire, the ratings or how they talk about themselves. The questionnaire \
+says what they claim; the episodes are the evidence. A ticked area with no episode is not a domain. Use this ladder; pick the highest level that the \
 evidence genuinely supports, and if in doubt go one lower:
 ${ladderText()}
 
@@ -293,11 +423,10 @@ so rather than fill the gap. No scores in the feedback text.
   "confidence": {
     "pattern": "one sentence on the shape of the ratings (where high, where it drops); 'no ratings' if none"
   },
-  "wants": [ "what they said they want to get better at, 0–3 short items" ],
-  "offers": [ "what they could show a colleague, 0–2 short items, empty if nothing" ],
+  "wants": [ "what they said in the interview they want to get better at, 0–3 short items" ],
+  "offers": [ "what they described that they could show a colleague, 0–2 short items, empty if nothing" ],
   "productSignals": {
-    "wouldPayFor": "what they said would be worth their time or money, or empty string",
-    "quote": "a short verbatim line about that, or empty string"
+    "quote": "a short verbatim line from the interview about what they would value, or empty string"
   },
   "feedback": {
     "headline": "one warm line, e.g. 'Thanks ${name}: here is what stood out'",
@@ -407,6 +536,7 @@ Output shape:
 
   window.Prompts = {
     DOMAINS, LADDER, STANCES, MARK, PHASES, NUDGES,
+    QUESTIONNAIRE, QUESTION_ORDER, questionSkipped, optionLabel, formatQuestionnaire,
     buildInterviewSystem, openingMessages, interviewMessages, formatRatingsTurn,
     buildProfilePrompt, buildSharebackPrompt, buildProductReadPrompt,
     transcriptText, compactProfileForAggregate,
