@@ -144,6 +144,7 @@
       ],
       tools: ["Microsoft Copilot"],
       judgement: "Uses only the tool the municipality's IT department allows, inside their tenant. Corrects the meeting summary against the recording before sending; does not use it for anything about individual staff, reorganisation or conflict in his team.",
+      probedNoEpisode: ["building"],
       stance: "pragmatic"
     },
     confidence: {
@@ -383,6 +384,7 @@
       ],
       tools: ["Microsoft Copilot"],
       judgement: "Has not yet checked what the hospital allows beyond the fact that Copilot is installed; did not check the meeting notes closely. Says she would never put patient or staff details in, but has not had to decide yet.",
+      probedNoEpisode: ["client"],
       stance: "enthusiast"
     },
     confidence: {

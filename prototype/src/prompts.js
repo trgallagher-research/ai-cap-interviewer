@@ -62,7 +62,7 @@
       label: "How often does an AI tool (ChatGPT, Copilot, Claude, Gemini or similar) show up in your work?",
       options: [
         { key: "never",   label: "Never" },
-        { key: "tried",   label: "I have tried it a few times" },
+        { key: "tried",   label: "I have tried it once or a few times" },
         { key: "monthly", label: "Now and then, a few times a month" },
         { key: "weekly",  label: "Most weeks" },
         { key: "daily",   label: "Most days" },
@@ -90,9 +90,9 @@
       id: "stance", type: "single", required: true,
       label: "Which comes closest to how you feel about AI in your work?",
       options: [
-        { key: "enthusiast", label: "Keen: I want to do more with it" },
+        { key: "enthusiast", label: "Keen: I want to do (more) with it" },
         { key: "pragmatic",  label: "Practical: useful for some things, not others" },
-        { key: "cautious",   label: "Careful: I use it, with reservations" },
+        { key: "cautious",   label: "Careful: open to it, with reservations" },
         { key: "sceptical",  label: "Doubtful: not convinced it helps my kind of work" },
         { key: "worried",    label: "Uneasy: I worry about what it does" },
       ],
@@ -205,8 +205,8 @@ question. Mirror their register. Use their own words back to them.
 - Ask ONE question per message, then stop. Never stack questions. One or two sentences per \
 message is the norm; three at most. No bullet lists, no headings.
 - Concrete over abstract. When they speak in generalities ("I use it for writing"), ask for the \
-most recent real instance: what task, which tool, what they typed, what came back, what they did \
-with it, how they judged it, what went wrong. Episodes are the evidence; opinions are not.
+most recent real instance. Then ask for one detail per message: what they typed, then what came \
+back, then what they did with it and how they judged it. Episodes are the evidence; opinions are not.
 - Follow the thread they open before moving on. Cover ground over the whole conversation, not \
 as a checklist.
 - Short answers are fine. If an answer is two words, do not scold or repeat the question; narrow \
@@ -223,7 +223,9 @@ still cannot get it to do.
 - This is a SHORT interview: ask 4 to 7 questions, then request the ratings. The questionnaire \
 below already covers how often they use AI, for what, with which tools, how they feel about it, \
 and what they would value or pay for. Never ask those again. Your job is the part a \
-questionnaire cannot get: concrete episodes and where their edges are. Do not pad.
+questionnaire cannot get: concrete episodes and where their edges are. Do not pad. Never ask \
+again anything they answered; if an answer shows (not answered) or (none ticked), you may ask it \
+once inside an episode ("Which tool was that?").
 
 # What ${name} said in the opening questionnaire (self-report; use it to choose where to dig)
 ${formatQuestionnaire(answers)}
@@ -232,10 +234,14 @@ ${formatQuestionnaire(answers)}
 ${nonUser ? `${name} has not used AI tools in their work. Ask about two concrete moments: one where \
 AI came up (a colleague, a client, an article, a tool their organisation introduced) and what \
 happened; then what stops them or what they would need to see to try it, taking the answer as it \
-comes. Then go to the ratings with first-step items.` : `1. PRACTICE: ask for the most recent real instance in the area they ticked that looks most \
+comes. Then go to the ratings with first-step items.` : `If they ticked no areas, or chose Doubtful \
+or Uneasy, start from the most recent time they tried it, then a time they saw others use it, as \
+for a non-user, and take what comes without pushing.
+1. PRACTICE: ask for the most recent real instance in the area they ticked that looks most \
 central to their work: what task, which tool, what they typed, what came back, what they did with \
-it. Probe once or twice for specifics. Then ask for one more episode, ideally in a different area \
-they ticked, or one where it went wrong. Listen for these areas, without naming them as a list:
+it. Probe once or twice for specifics. Then ask for one more episode in the ticked area that looks \
+least supported by what you have heard so far (often building tools, analysis, or work with \
+clients). If it turns out to be a plan or a one-off, that is a finding; do not push. Listen for these areas, without naming them as a list:
 ${domainText()}
 2. STRETCH: one or two questions on their edges, chosen to fit what you heard: how they check \
 output, when they decide not to use AI, how they handle client material, what they would like to \
@@ -257,8 +263,11 @@ is used in it. Example: "Use an AI tool to turn your rough notes \
 from an intake conversation into a first draft of a proposal, and judge what in the draft to keep."
 - Graded in difficulty so the set has a floor and a ceiling: at most two items may be things they \
 have clearly already done; at least one must be one step beyond what they described, and at least \
-one two steps beyond. Give each a "level" from 1 to 4 using this ladder (level 0 is "has not used"; \
-a level-1 task is an exploring-level task, and so on):
+one two steps beyond. For someone already at level 3 or 4, "beyond" means a harder version of their \
+own practice (for others, with a client's own material, live in the room). Give each item a \
+"beyond" value: 0 = they have clearly done this, 1 = one step beyond what they described, 2 = two \
+steps beyond. Also give each a "level" from 1 to 4 using this ladder (level 0 is "has not used"; a \
+level-1 task is an exploring-level task, and so on):
 ${ladderText()}
 - Phrase every task in the member's own domain and words; never generic "use AI effectively".
 - For a non-user the easy items describe first steps ("Open a free AI chat tool and ask it to \
@@ -275,14 +284,15 @@ short follow-up about the biggest gap between two ratings if it is interesting, 
 Every message ends with a phase marker naming the phase your NEXT question belongs to:
 ${MARK.PHASE_OPEN} orient ${MARK.CLOSE}   (one of: orient, practice, stretch, rate, close)
 The rating request also includes, on its own line, strictly valid JSON:
-${MARK.RATE_OPEN} [{"id":"r1","task":"…","level":1},{"id":"r2","task":"…","level":2}] ${MARK.CLOSE}
+${MARK.RATE_OPEN} [{"id":"r1","task":"…","level":2,"beyond":0},{"id":"r2","task":"…","level":3,"beyond":1}] ${MARK.CLOSE}
 The rating request itself ends with ${MARK.PHASE_OPEN} rate ${MARK.CLOSE}; the message after the \
 ratings ends with ${MARK.PHASE_OPEN} close ${MARK.CLOSE}.
 Your final closing message also includes, on its own line: ${MARK.COMPLETE}
-Optionally, on a question where a small menu helps (narrowing a short answer, "this week or \
-longer ago", choosing between areas they ticked), add on its own line 2 to 4 short quick replies \
-as strictly valid JSON, each under 40 characters:
-${MARK.CHIPS_OPEN} ["This week", "This month", "Longer ago"] ${MARK.CLOSE}
+Optionally, on a question where a small menu helps, add on its own line 2 to 4 short quick \
+replies as strictly valid JSON, each under 40 characters. Chips are only for time ("This week"), \
+frequency, or choosing between things they have already mentioned or ticked; always include \
+"Something else". Never offer chips that supply what they did, why, or how they judged it:
+${MARK.CHIPS_OPEN} ["This week", "This month", "Longer ago", "Something else"] ${MARK.CLOSE}
 The member can tap one or still type. Never use chips on the rating request or the closing.
 Never use the "<<" sequence anywhere except in these markers. The member never sees the markers.
 
@@ -302,7 +312,7 @@ and ask your first question.`;
   function interviewMessages(member, turns, opts) {
     const msgs = openingMessages(member, opts && opts.answers);
     for (const t of turns) {
-      msgs.push({ role: t.role === "interviewer" ? "assistant" : "user", content: t.text });
+      msgs.push({ role: t.role === "interviewer" ? "assistant" : "user", content: (t.tapped ? "[tapped quick reply] " : "") + t.text });
     }
     const extra = (opts && opts.nudge) ? opts.nudge : "";
     if (opts && opts.endNow) {
@@ -356,7 +366,7 @@ and ask your first question.`;
 
   function transcriptText(turns) {
     return turns
-      .map((t) => `${t.role === "interviewer" ? "Interviewer" : "Member"}: ${t.text}`)
+      .map((t) => `${t.role === "interviewer" ? "Interviewer" : "Member"}: ${t.tapped ? "[tapped] " : ""}${t.text}`)
       .join("\n\n");
   }
 
@@ -381,7 +391,9 @@ ${formatQuestionnaire(answers)}
 # Two separate readings: described practice and rated confidence
 Code PRACTICE from what they DESCRIBED doing in the interview (episodes, specifics, judgement), \
 never from the questionnaire, the ratings or how they talk about themselves. The questionnaire \
-says what they claim; the episodes are the evidence. A ticked area with no episode is not a domain. Use this ladder; pick the highest level that the \
+says what they claim; the episodes are the evidence. A ticked area with no episode is not a domain. \
+A member line starting [tapped] is a quick reply the interviewer offered: a choice, never a quote \
+or evidence on its own, and never one of the "quotes". Use this ladder; pick the highest level that the \
 evidence genuinely supports, and if in doubt go one lower:
 ${ladderText()}
 
@@ -415,7 +427,8 @@ so rather than fill the gap. No scores in the feedback text.
   "practice": {
     "level": 0-4,
     "summary": "2–3 sentences, third person, grounded in what ${name} described",
-    "domains": [ { "key": "writing", "evidence": "short quote or close paraphrase of something they DID; for a non-user, omit domains entirely" } ],
+    "domains": [ { "key": "writing", "evidence": "short quote or close paraphrase of something they DID" } ],   // use an empty array for a non-user
+    "probedNoEpisode": [ "domain keys they ticked AND you can see were asked about in the interview, where no real episode emerged (a plan, a one-off, a deflated claim); empty if none" ],
     "tools": [ "tools they themselves use, or empty; never tools they only mentioned" ],
     "judgement": "1–2 sentences: how they check output, data/confidentiality, when they choose not to use AI",
     "stance": "one of the stances"

@@ -117,6 +117,6 @@ Member: `{ name: "Joris", role: "trainer" }`
 
 **(i) Chips.** One set, on a sensitive question, slightly leading. Acceptable but see report.
 
-**(j) Typing load.** ~180 member words vs ~300.
+**(j) Typing load.** 152 typed member words plus 1 tap vs 298; 8 interviewer turns vs 14.
 
 **(k) Cost.** Level and divergence still right; but the profile cannot say that his analysis claim is a plan, and the organiser stat lumps his unverified ticks with Marieke's unprobed ones.

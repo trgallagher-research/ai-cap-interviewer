@@ -95,7 +95,7 @@ Member: `{ name: "Marieke", role: "team coach" }`
 ```
 `thinking`, `analysis`, `writing` were ticked but not probed and so are not domains → `stats().questionnaire.claimedNoEpisode` counts all three for Marieke, the same counter that flags Joris's overclaims.
 
-`Engine.divergenceFor(4, items, ratings)` → **cautious-practitioner** (expected 82, residual −20).
+`Engine.divergenceFor(4, items, ratings)` → **aligned** (expected 82, residual −16, tolerance 18). With r3/r4/r5 at 65/40/30 (equally honest) it becomes **cautious-practitioner** (residual −19).
 
 ## Critique
 
@@ -105,7 +105,7 @@ Member: `{ name: "Marieke", role: "team coach" }`
 
 **(c) Rating items.** All tool-based, her words. The new grading rule ("at least one must be one step beyond… and at least one two steps beyond") **cannot be satisfied at level 4**: the ladder stops at 4, so r3–r5 are all labelled 4 although r5 is clearly harder than r3. The model wrote three ceiling items to honour "beyond".
 
-**(d) Divergence: misfires.** `ITEM_TABLE[4]` expects 82 for every item at or below level 4, because no item can be "beyond" a level-4 member. Her honest 45 and 35 on genuine stretch items pull her to residual −20 → "cautious-practitioner". The better the interviewer follows the new "two steps beyond" rule, the more likely a level-4 member is mislabelled. (Old sim: aligned, because it had only two stretch items.)
+**(d) Divergence: on a knife edge.** `ITEM_TABLE[4]` expects 82 for every item at or below level 4, because no item can be "beyond" a level-4 member. Her honest 45 and 35 on genuine stretch items pull her to residual −16, two points from "cautious-practitioner"; a few points lower on the stretch items flips it. The better the interviewer follows the new "two steps beyond" rule, the more likely a level-4 member is mislabelled. (Old item set, with fewer stretch items: residual −3.)
 
 **(e) Next steps.** Fit, two weeks, checks. Good.
 
@@ -117,6 +117,6 @@ Member: `{ name: "Marieke", role: "team coach" }`
 
 **(i) Chips.** None, correctly: open questions to a fluent user don't need menus.
 
-**(j) Typing load.** About 260 member words vs ~560 in the old sim.
+**(j) Typing load.** 272 typed member words vs 486 in the old sim; 8 interviewer turns vs 14.
 
 **(k) Cost.** Level code and next steps intact. Lost: the thinking-partner practice (her "what colleagues can't do" answer), so the organiser map undercounts `thinking` for the one member who leads it, and the peer-exchange quote.

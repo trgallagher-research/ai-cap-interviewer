@@ -144,6 +144,6 @@ Note the conflict: the prompt says the questionnaire "already covers… with whi
 
 **(i) Chips.** Where they help most. One leading set: Q3 ["Soften the tone", "Shorten it", "Rewrite it"] supplied the content of his answer. Q6 ["…", "Didn't read them"] also supplied content but it is a choice he could not have made unless true. The prompt's chip guidance ("narrowing a short answer, 'this week or longer ago', choosing between areas they ticked") does not cover content menus like Q3, yet a model will produce them because "offer a small menu of two or three possibilities to react to" invites it.
 
-**(j) Typing load.** 15 typed words in the interview (old: ~50). Interviewer turns 17 → 10.
+**(j) Typing load.** 21 typed words plus 4 chip taps (old: 77 typed). Interviewer turns 17 → 10.
 
 **(k) Cost.** None for the level code. Lost: the "plan maybe, writing is slow" want, and any product signal.

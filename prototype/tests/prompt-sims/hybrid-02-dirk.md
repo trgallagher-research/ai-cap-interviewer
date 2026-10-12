@@ -110,6 +110,6 @@ Model returns `tools: []` as the new rule demands ("never tools they only mentio
 
 **(i) Chips.** One well-placed set (Q4). Correctly absent elsewhere.
 
-**(j) Typing load.** Lower (see report table), but he typed more per answer because he pushes back; that is persona, not design.
+**(j) Typing load.** 168 typed member words vs 449; 6 interviewer turns vs 13. He still types long answers because he pushes back; that is persona, not design.
 
 **(k) Cost.** Lost the "what would you refuse" product signal and his would-pay nuance ("a serious afternoon on ethics and contracting"): the questionnaire's fixed options cannot capture a conditional yes from a sceptic who ticked "Nothing for now".

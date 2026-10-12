@@ -391,7 +391,7 @@
   function showChips(chips) {
     const box = document.getElementById("chips");
     if (!box || S.rateCardEl || !S.interview || S.interview.status !== "in_progress") return;
-    box.replaceChildren(...chips.map((t) => h("button", { class: "chip", type: "button", on: { click: () => sendText(t) } }, t)));
+    box.replaceChildren(...chips.map((t) => h("button", { class: "chip", type: "button", on: { click: () => sendText(t, { tapped: true }) } }, t)));
     box.hidden = false;
     scrollChat();
   }
@@ -427,12 +427,12 @@
   }
 
   /** The one path for a member answer: typed or tapped chip. */
-  function sendText(raw) {
+  function sendText(raw, opts) {
     if (S.busy) return false;
     const text = String(raw || "").trim();
     if (!text) return false;
     clearChips();
-    S.interview.answer(text);
+    S.interview.answer(text, opts);
     const stale = document.getElementById("turn-error");
     if (stale) { stale.hidden = true; stale.replaceChildren(); }
     chatEl().appendChild(bubble("member", text));

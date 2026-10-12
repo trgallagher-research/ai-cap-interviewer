@@ -124,6 +124,6 @@ r1=60 (L1), r2=65 (L1), r3=40 (L2), r4=30 (L2). Mean 49.
 
 **(i) Chips.** Used where they help (opening a hard question for a beginner), not on rate/close.
 
-**(j) Typing load.** See HYBRID-REPORT table: member words roughly halved; interviewer turns 13 → 7.
+**(j) Typing load.** 180 typed member words vs 431; interviewer turns 13 → 7; plus 5 questionnaire taps.
 
 **(k) Cost of shortening.** None material for a non-user: still two moments and a clear "what would you need". Lost: the settlement-template wish (now only in the ratings) and the "keep notes sparse" strength.

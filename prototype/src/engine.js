@@ -124,6 +124,7 @@
         id: String(x.id || ("r" + (k + 1))),
         task: x.task.trim(),
         level: clampInt(x.level, 1, 4, 2),
+        ...(x.beyond === undefined || x.beyond === null ? {} : { beyond: clampInt(x.beyond, 0, 2, 1) }),
       }));
     if (items.length < 2 || items.length > 6) return null;
     // ids must be unique
@@ -188,10 +189,12 @@
     }
 
     /** Add the member's answer (text). */
-    answer(text) {
+    answer(text, opts) {
       const t = (text || "").trim();
       if (!t) return;
-      this.turns.push({ role: "member", text: t });
+      const turn = { role: "member", text: t };
+      if (opts && opts.tapped) turn.tapped = true;
+      this.turns.push(turn);
     }
 
     /** Record slider ratings and add them to the transcript as a member turn. */
@@ -324,10 +327,12 @@
   /** Level-aware classification from the member's own rated items. */
   function divergenceFor(level, items, ratings) {
     const L = clampInt(level, 0, 4, 0);
-    const rated = (items || []).map((it) => ({ level: clampInt(it.level, 1, 4, 2), rating: ratings ? ratings[it.id] : it.rating })).filter((x) => typeof x.rating === "number");
+    // "beyond" (0..2, from the interviewer) is preferred: it stays meaningful at levels 3-4, where
+    // item levels cannot rise above 4. Older items without it fall back to item level minus practice level.
+    const rated = (items || []).map((it) => ({ level: clampInt(it.level, 1, 4, 2), beyond: (typeof it.beyond === "number") ? it.beyond : null, rating: ratings ? ratings[it.id] : it.rating })).filter((x) => typeof x.rating === "number");
     if (!rated.length) return { kind: "unrated", note: NOTES.unrated, expected: null, residual: null };
     const mean = rated.reduce((a, x) => a + x.rating, 0) / rated.length;
-    const expected = rated.reduce((a, x) => a + ITEM_EXPECTED(L, x.level - L), 0) / rated.length;
+    const expected = rated.reduce((a, x) => a + ITEM_EXPECTED(L, x.beyond !== null ? x.beyond : x.level - L), 0) / rated.length;
     const residual = Math.round(mean - expected);
     const tol = TOL_BY_LEVEL[L];
     let kind = residual >= tol ? "confident-starter" : residual <= -tol ? "cautious-practitioner" : "aligned";
@@ -376,7 +381,7 @@
     const m = modelOut || {};
     const pr = m.practice || {};
     const level = clampInt(pr.level, 0, 4, 0);
-    const items = (interview.rateItems || []).map((it) => ({ id: it.id, task: it.task, level: it.level, rating: interview.ratings ? interview.ratings[it.id] : undefined }));
+    const items = (interview.rateItems || []).map((it) => ({ id: it.id, task: it.task, level: it.level, ...(typeof it.beyond === "number" ? { beyond: it.beyond } : {}), rating: interview.ratings ? interview.ratings[it.id] : undefined }));
     const mean = meanRating(interview.rateItems, interview.ratings);
     const validKeys = new Set(P.DOMAINS.map((d) => d.key));
     const domains = Array.isArray(pr.domains) ? pr.domains.filter((d) => d && validKeys.has(d.key)).map((d) => ({ key: d.key, evidence: String(d.evidence || "") })) : [];
@@ -394,8 +399,9 @@
         level, levelLabel: P.LADDER[level].label,
         summary: String(pr.summary || ""),
         domains,
-        tools: Array.isArray(pr.tools) && pr.tools.length ? pr.tools.map(String) : ((a && Array.isArray(a.tools) && a.frequency !== "never") ? a.tools.slice() : []),
+        tools: Array.isArray(pr.tools) ? pr.tools.map(String) : ((a && Array.isArray(a.tools) && a.frequency !== "never") ? a.tools.slice() : []),
         judgement: String(pr.judgement || ""),
+        probedNoEpisode: Array.isArray(pr.probedNoEpisode) ? pr.probedNoEpisode.filter((k) => validKeys.has(k) && !domains.some((d) => d.key === k) && a && Array.isArray(a.uses) && a.uses.includes(k)) : [],
         stance,
       },
       confidence: { items, mean, band: band(mean), pattern: String((m.confidence && m.confidence.pattern) || "") },
@@ -443,10 +449,10 @@
       (p.offers || []).forEach((o) => offers.push(o));
       if (p.productSignals && p.productSignals.wouldPayFor) pay.push(p.productSignals.wouldPayFor);
     }
-    const q = { frequency: {}, offer: {}, pay: { yes: 0, maybe: 0, no: 0 }, selfDomains: {}, claimedNoEpisode: {}, answered: 0 };
+    const q = { frequency: {}, offer: {}, pay: { yes: 0, maybe: 0, no: 0 }, selfDomains: {}, claimedNoEpisode: {}, probedNoEpisode: {}, answered: 0 };
     (P.QUESTIONNAIRE.frequency.options).forEach((o) => { q.frequency[o.key] = 0; });
     (P.QUESTIONNAIRE.offer.options).forEach((o) => { q.offer[o.key] = 0; });
-    P.DOMAINS.forEach((d) => { q.selfDomains[d.key] = 0; q.claimedNoEpisode[d.key] = 0; });
+    P.DOMAINS.forEach((d) => { q.selfDomains[d.key] = 0; q.claimedNoEpisode[d.key] = 0; q.probedNoEpisode[d.key] = 0; });
     for (const p of profiles) {
       const sr = p.selfReport; const ps = p.productSignals || {};
       if (!sr) continue;
@@ -455,7 +461,10 @@
       for (const k of sr.domains || []) {
         if (q.selfDomains[k] === undefined) continue;
         q.selfDomains[k]++;
-        if (!(p.practice.domains || []).some((d) => d.key === k)) q.claimedNoEpisode[k]++;
+        if (!(p.practice.domains || []).some((d) => d.key === k)) {
+          q.claimedNoEpisode[k]++;
+          if ((p.practice.probedNoEpisode || []).includes(k)) q.probedNoEpisode[k]++;
+        }
       }
       const qa = p.questionnaire || {};
       for (const k of (Array.isArray(qa.offer) ? qa.offer : [])) if (q.offer[k] !== undefined) q.offer[k]++;
