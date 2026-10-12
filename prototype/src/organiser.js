@@ -83,6 +83,8 @@
     const ev = new Set((p.practice.domains || []).map((d) => d.key));
     return sr.domains.filter((k) => !ev.has(k));
   }
+  function probedOnly(p) { const pr = p.practice.probedNoEpisode; return Array.isArray(pr) ? claimedOnly(p).filter((k) => pr.includes(k)) : []; }
+  const BEYOND = { 0: "done before", 1: "a step beyond", 2: "two steps beyond" };
   function payOf(p) { const ps = p.productSignals || {}; return ps.pay || (p.questionnaire && p.questionnaire.pay) || ""; }
   function optLabel(qid, key) { return (P().optionLabel ? P().optionLabel(qid, key) : key); }
   const FREQ_SHORT = { never: "Never", tried: "Tried", monthly: "Monthly", weekly: "Weekly", daily: "Daily" };
@@ -174,6 +176,9 @@
 .og-heat .hm.has { cursor: pointer; }
 .og-heat .hm.has:hover, .og-heat .hm.has:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; }
 .og-heat .hm.claim, .og-claimsw { background: repeating-linear-gradient(135deg, transparent 0 4px, var(--line) 4px 6px), var(--surface); box-shadow: inset 0 0 0 1.5px var(--muted); cursor: help; }
+.og-heat .hm.claim.probed, .og-claimsw.probed { background: repeating-linear-gradient(135deg, transparent 0 3px, var(--muted) 3px 4.5px), var(--surface); box-shadow: inset 0 0 0 2px var(--fg-2); position: relative; }
+.og-heat .hm.claim.probed::after { content: ""; position: absolute; right: 4px; top: 50%; width: 6px; height: 6px; margin-top: -3px; border-radius: 50%; background: var(--fg-2); box-shadow: 0 0 0 2px var(--surface); }
+.og-claimsw.probed { position: relative; }
 .og-heat .hm.claim:hover, .og-heat .hm.claim:focus-visible { outline: 2px solid var(--fg); outline-offset: 1px; }
 .og-heat tfoot tr.claimrow td, .og-heat tfoot tr.claimrow th { color: var(--muted); }
 .og-freq { margin-top: .8rem; }
@@ -197,6 +202,9 @@
 .og-qq dd { margin: 0; }
 .og-drawer .dom.claim b { font-weight: 500; color: var(--fg-2); }
 .og-drawer .dom.claim span { color: var(--muted); font-style: italic; }
+.og-drawer .dom.claim.probed span { color: var(--fg-2); }
+.og-bar .t .bey { flex: none; font-size: .7rem; color: var(--fg-2); border: 1px solid var(--line); border-radius: 999px; padding: 0 .4rem; white-space: nowrap; }
+.og-transcript .tap { font-size: .7rem; color: var(--muted); border: 1px dashed var(--muted); border-radius: 3px; padding: 0 .3rem; margin-left: .4rem; font-weight: 400; text-transform: none; letter-spacing: 0; }
 .og-heat .hm:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .og-heat tfoot td, .og-heat tfoot th { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--fg-2); font-size: .8rem; border-bottom: 0; }
 .og-heat tfoot th { font-family: var(--font-body); font-weight: 500; }
@@ -606,8 +614,10 @@
           b.addEventListener("click", () => openDetail(p));
           td.appendChild(b);
         } else if (claimedOnly(p).includes(d.key)) {
-          const lines = [p.member.name + ": " + d.label, "Ticked this in the quick questions, but gave no example"];
-          const b = el("button", { type: "button", class: "hm claim", title: `${d.label}: ticked this in the quick questions, but gave no example`, "aria-label": `${p.member.name}, ${d.label}: ticked this in the quick questions, but gave no example`, "data-domain": d.key });
+          const probed = probedOnly(p).includes(d.key);
+          const msg = probed ? "Ticked this, and when asked gave no real example" : "Ticked this in the quick questions; the conversation did not get to it";
+          const lines = [p.member.name + ": " + d.label, msg];
+          const b = el("button", { type: "button", class: "hm claim" + (probed ? " probed" : ""), title: `${d.label}: ${msg}`, "aria-label": `${p.member.name}, ${d.label}: ${msg}`, "data-domain": d.key, "data-probed": probed ? "1" : "0" });
           b.addEventListener("pointerenter", () => tip.showAt(b, lines));
           b.addEventListener("pointerleave", tip.hide);
           b.addEventListener("focus", () => tip.showAt(b, lines));
@@ -629,18 +639,26 @@
     const qs = stats.questionnaire;
     let foot3 = null;
     if (qs && qs.answered) {
-      foot3 = el("tr", { class: "claimrow" }, [el("th", { class: "who", scope: "row" }, "ticked, no example")]);
-      D.forEach((d) => foot3.appendChild(el("td", { class: "cell", style: { textAlign: "center" } }, String((qs.claimedNoEpisode || {})[d.key] || 0))));
+      foot3 = el("tr", { class: "claimrow asked" }, [el("th", { class: "who", scope: "row" }, "ticked, asked, no example")]);
+      D.forEach((d) => foot3.appendChild(el("td", { class: "cell", style: { textAlign: "center" } }, String((qs.probedNoEpisode || {})[d.key] || 0))));
     }
-    table.appendChild(el("tfoot", null, [foot, foot2, foot3]));
+    let foot4 = null;
+    if (qs && qs.answered) {
+      foot4 = el("tr", { class: "claimrow notasked" }, [el("th", { class: "who", scope: "row" }, "ticked, not asked about")]);
+      D.forEach((d) => foot4.appendChild(el("td", { class: "cell", style: { textAlign: "center" } }, String(((qs.claimedNoEpisode || {})[d.key] || 0) - ((qs.probedNoEpisode || {})[d.key] || 0)))));
+    }
+    table.appendChild(el("tfoot", null, [foot, foot2, foot3, foot4]));
     wrap.appendChild(table);
     const L = P().LADDER;
     const ramp = el("div", { class: "og-ramp", "aria-hidden": "true" }, [el("span", null, "Filled cell, shaded by that member's practice level:")].concat(L.map((l, i) => el("span", null, [el("i", { class: "og-sw", style: { background: `var(--og-l${i})` } }), l.label]))));
-    const claimKey = (qs && qs.answered) ? el("div", { class: "og-ramp", "aria-hidden": "true" }, [el("span", null, [el("i", { class: "og-sw og-claimsw" }), "Hatched outline: ticked in the quick questions, but no example given"])]) : null;
+    const claimKey = (qs && qs.answered) ? el("div", { class: "og-ramp", "aria-hidden": "true" }, [
+      el("span", null, [el("i", { class: "og-sw og-claimsw probed" }), "Dense hatch, bold outline: ticked, asked about it, no real example"]),
+      el("span", null, [el("i", { class: "og-sw og-claimsw" }), "Light hatch: ticked, the conversation did not get to it"]),
+    ]) : null;
     const gapNames = stats.gaps.map((k) => DOMAIN_SHORT[k] || k);
     const caption = el("p", { class: "og-caption" },
       "A filled cell means the member described a real example of using AI for that kind of work; hover or tab to a cell to read what they said. " +
-      ((qs && qs.answered) ? "A hatched outline means they ticked it in the quick questions but did not give an example, so it is a claim rather than evidence. " : "") +
+      ((qs && qs.answered) ? "A hatched cell means they ticked it in the quick questions but gave no example: a dense hatch means the interviewer asked and nothing real came up (often a plan, or a claim that shrank); a light hatch means it was not reached, so it is still an open question. " : "") +
       "Columns marked \"gap\" have fewer than two members who use AI routinely or better for that kind of work, so there is little in-house knowledge to draw on there." +
       (gapNames.length ? ` Gaps right now: ${gapNames.join(", ")}.` : " There are no gaps right now."));
     const above = el("p", { class: "og-note", style: { marginBottom: ".5rem" } }, "Columns marked \"gap\" have fewer than two members who use AI routinely or better for that kind of work.");
@@ -993,7 +1011,8 @@
         return el("div", { class: "dom" }, [el("b", null, dom ? dom.label : d.key), el("span", null, d.evidence || "")]);
       }).concat(claimedOnly(p).map((k) => {
         const dom = D.find((x) => x.key === k);
-        return el("div", { class: "dom claim", "data-claim": k }, [el("b", null, dom ? dom.label : k), el("span", null, "Ticked in the quick questions, but gave no example")]);
+        const probed = probedOnly(p).includes(k);
+        return el("div", { class: "dom claim" + (probed ? " probed" : ""), "data-claim": k, "data-probed": probed ? "1" : "0" }, [el("b", null, dom ? dom.label : k), el("span", null, probed ? "Ticked this, and when asked gave no real example" : "Ticked in the quick questions; the conversation did not get to it")]);
       })) : [el("p", { class: "og-caption" }, "No kinds of work with evidence.")]),
       sec("Tools and judgement", [
         el("p", null, (p.practice.tools || []).length ? "Tools: " + p.practice.tools.join(", ") : "No tools named."),
@@ -1018,7 +1037,7 @@
       Array.isArray(p.transcript) && p.transcript.length ? sec("Transcript", [
         el("details", null, [
           el("summary", null, `Show the transcript (${plural(p.transcript.length, "turn")})`),
-          el("div", { class: "og-transcript" }, p.transcript.map((t) => el("div", { class: "turn" }, [el("b", null, t.role === "interviewer" ? "Interviewer" : p.member.name), t.text]))),
+          el("div", { class: "og-transcript" }, p.transcript.map((t) => el("div", { class: "turn" }, [el("b", null, [t.role === "interviewer" ? "Interviewer" : p.member.name, t.tapped ? el("span", { class: "tap", title: "The member tapped a suggested reply instead of typing" }, "tapped quick reply") : null]), t.text]))),
         ]),
       ]) : null,
     ]);
@@ -1055,7 +1074,7 @@
       out.push(el("div", { class: "og-bars" }, items.map((it) => {
         const v = Number.isFinite(it.rating) ? it.rating : null;
         return el("div", { class: "og-bar" }, [
-          el("div", { class: "t" }, [el("span", { class: "lv", title: "Task difficulty on the practice ladder" }, "L" + it.level), el("span", null, it.task)]),
+          el("div", { class: "t" }, [el("span", { class: "lv", title: "Task difficulty on the practice ladder" }, "L" + it.level), el("span", null, it.task), (it.beyond !== undefined && BEYOND[it.beyond]) ? el("span", { class: "bey", title: "How this task compares with what they described doing" }, BEYOND[it.beyond]) : null]),
           el("div", { class: "track", role: "img", "aria-label": `rated ${v === null ? "skipped" : v}` }, [el("div", { class: "fill", style: { width: (v === null ? 0 : v) + "%" } })]),
           el("div", { class: "v" }, v === null ? "skipped" : v + " / 100"),
         ]);

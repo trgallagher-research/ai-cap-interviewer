@@ -34,6 +34,7 @@ function profile(o) {
     const pay = a.pay || "";
     base.productSignals = { wouldPayFor: (pay === "yes" || pay === "maybe") ? keys.join("; ") : "", offerKeys: keys, pay, quote: o.quote || "" };
   } else { base.questionnaire = null; base.selfReport = null; }
+  if (o.probed) base.practice.probedNoEpisode = o.probed;
   if (o.transcript) base.transcript = o.transcript;
   if (o.endedEarly) base.endedEarly = true;
   return base;
@@ -42,10 +43,11 @@ const SEED = [
   profile({ id: "p_a", name: "Anneke", role: "team coach", level: 3, mean: 74, kind: "aligned", stance: "pragmatic",
     summary: "Uses Claude as a thinking partner on team cases and to prepare workshop designs.",
     domains: [{ key: "thinking", evidence: "I talk a case through before I go in." }, { key: "prep", evidence: "I ask it for three workshop openings and pick one." }, { key: "writing", evidence: "Drafts proposals from my intake notes." }],
-    tools: ["Claude", "ChatGPT"], items: [{ id: "r1", task: "Draft a proposal from intake notes", level: 2, rating: 85 }, { id: "r2", task: "Use AI as a sparring partner on a stuck team case", level: 3, rating: 70 }, { id: "r3", task: "Build a reusable prompt for workshop design", level: 4, rating: 66 }],
+    tools: ["Claude", "ChatGPT"], items: [{ id: "r1", task: "Draft a proposal from intake notes", level: 2, rating: 85, beyond: 0 }, { id: "r2", task: "Use AI as a sparring partner on a stuck team case", level: 3, rating: 70 }, { id: "r3", task: "Build a reusable prompt for workshop design", level: 4, rating: 66, beyond: 1 }],
     wants: ["learn to build reusable prompts for workshop design"], offers: ["can show how I use it to prepare workshop designs"], pay: "a half-day with peers on real cases", quote: "I would pay for a half-day with peers on real cases.", quotes: ["I talk a case through before I go in."],
     q: { frequency: "daily", uses: ["thinking", "prep", "writing", "analysis"], tools: ["Claude", "ChatGPT"], stance: "pragmatic", offer: ["peer-halfday", "prompt-library"], offerOther: "a supervision group on AI and ethics", pay: "yes", canShow: "yes" },
-    transcript: [{ role: "interviewer", text: "Hello Anneke, what does a typical week look like?" }, { role: "member", text: "Mostly team sessions and a lot of preparation." }] }),
+    probed: ["analysis"],
+    transcript: [{ role: "interviewer", text: "Hello Anneke, what does a typical week look like?" }, { role: "member", text: "Mostly team sessions and a lot of preparation." }, { role: "interviewer", text: "When did you last use it?" }, { role: "member", text: "This week", tapped: true }] }),
   profile({ id: "p_b", name: "Bram", role: "mediator", level: 1, mean: 78, kind: "confident-starter", stance: "enthusiast",
     summary: "Has tried ChatGPT a few times for quick summaries.", domains: [{ key: "writing", evidence: "Summarised a long email thread once." }],
     tools: ["ChatGPT"], items: [{ id: "r1", task: "Summarise a document", level: 1, rating: 90 }, { id: "r2", task: "Draft a mediation agreement", level: 2, rating: 66 }],
@@ -198,10 +200,15 @@ function check(name, ok, extra) { if (ok) { passes++; console.log("  ok   " + na
   const expectClaims = Object.values(qstats.claimedNoEpisode).reduce((a, b) => a + b, 0);
   check("heatmap: claimed-no-example cells = sum of claimedNoEpisode (" + expectClaims + ")", claimCells.length === expectClaims && expectClaims >= 3, JSON.stringify(claimCells));
   check("heatmap: filled cells = evidence count", (await page.$$("#og-heat tbody .hm.has")).length === SEED.reduce((a, p) => a + p.practice.domains.length, 0));
-  const claimRow = await page.$$eval("#og-heat tfoot tr.claimrow td", (n) => n.map((x) => +x.textContent));
-  check("heatmap footer 'ticked, no example' matches stats", JSON.stringify(claimRow) === JSON.stringify(await page.evaluate(() => Prompts.DOMAINS.map((d) => Engine.stats(SEED).questionnaire.claimedNoEpisode[d.key]))));
-  await page.hover("#og-heat .hm.claim");
-  check("claimed cell tooltip text", (await page.textContent("#og-heat .og-tip")).includes("Ticked this in the quick questions, but gave no example"));
+  const askedRow = await page.$$eval("#og-heat tfoot tr.claimrow.asked td", (n) => n.map((x) => +x.textContent));
+  const notAskedRow = await page.$$eval("#og-heat tfoot tr.claimrow.notasked td", (n) => n.map((x) => +x.textContent));
+  const qq = await page.evaluate(() => { const q = Engine.stats(SEED).questionnaire; return Prompts.DOMAINS.map((d) => [q.probedNoEpisode[d.key], q.claimedNoEpisode[d.key] - q.probedNoEpisode[d.key]]); });
+  check("heatmap footer rows (asked / not asked) match stats", JSON.stringify(askedRow) === JSON.stringify(qq.map((x) => x[0])) && JSON.stringify(notAskedRow) === JSON.stringify(qq.map((x) => x[1])), JSON.stringify({ askedRow, notAskedRow, qq }));
+  check("heatmap: probed cells = sum of probedNoEpisode", (await page.$$("#og-heat .hm.claim.probed")).length === qq.reduce((a, x) => a + x[0], 0) && qq.reduce((a, x) => a + x[0], 0) === 1);
+  await page.hover("#og-heat .hm.claim.probed");
+  check("probed cell tooltip text", (await page.textContent("#og-heat .og-tip")).includes("when asked gave no real example"));
+  await page.hover("#og-heat .hm.claim:not(.probed)");
+  check("not-asked cell tooltip text", (await page.textContent("#og-heat .og-tip")).includes("the conversation did not get to it"));
   // frequency strip
   const fsegs = await page.$$eval("#og-freq .og-freqbar .seg", (n) => n.length);
   check("frequency strip renders with a segment per non-zero answer", fsegs === Object.values(qstats.frequency).filter((v) => v > 0).length && (await page.textContent("#og-freq")).includes("How often members said they use it"));
@@ -228,7 +235,10 @@ function check(name, ok, extra) { if (ok) { passes++; console.log("  ok   " + na
   check("detail shows confidence bars", (await page.$$("#og-drawer .og-bar")).length === 3);
   check("detail shows transcript collapsed", (await page.$("#og-drawer details")) !== null);
   check("drawer shows Quick questions in plain words", drawerText.includes("Quick questions") && drawerText.includes("Most days") && drawerText.includes("A half-day with peers from this network"));
-  check("drawer marks ticked-but-no-example domain", (await page.$("#og-drawer .dom.claim[data-claim='analysis']")) !== null);
+  check("drawer marks ticked-asked-no-example domain", (await page.$("#og-drawer .dom.claim.probed[data-claim='analysis']")) !== null);
+  check("drawer shows 'beyond' tags", drawerText.includes("done before") && drawerText.includes("a step beyond"));
+  await page.click("#og-drawer details summary");
+  check("drawer transcript marks tapped quick reply", (await page.$$("#og-drawer .og-transcript .tap")).length === 1);
   check("detail shows residual in words", /rated \d+ points? (above|below) what their tasks would predict|rated exactly/.test(drawerText));
   await page.screenshot({ path: path.join(SHOTS, "desktop-light-detail.png") });
   await page.keyboard.press("Escape");
