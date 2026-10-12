@@ -169,6 +169,9 @@ function check(name, ok, extra) { if (ok) { passes++; console.log("  ok   " + na
   check("wants/offers/pay lists", (await page.$$("#og-signals .wants ul.full li")).length >= 3 && (await page.$$("#og-signals .offers ul.full li")).length >= 2 && (await page.$$("#og-signals .pay ul.full li")).length >= 2);
   check("wants theme tally present", (await page.$$("#og-signals .wants ul.tally li")).length >= 2);
   check("scatter labels every mark with a name", (await page.$$("#og-scatter text.lbl")).length === withMean);
+  check("scatter draws a per-member expected tick per rated mark, no band", (await page.$$("#og-scatter .ticks .tickline")).length === withMean && (await page.$("#og-scatter .band")) === null);
+  check("heatmap notes members without evidence", (await page.textContent("#og-heat")).includes("has not used AI tools"));
+  check("average confidence caption mentions rough comparison", (await page.textContent("#og-summary")).includes("rough comparison"));
   check("heatmap gap line above table", (await page.textContent("#og-heat")).indexOf("Columns marked \"gap\"") < (await page.textContent("#og-heat")).indexOf("Member"));
   check("members list has N cards", (await page.$$("#og-members .og-member")).length === N);
   check("sample markers shown", (await page.$$("#og-members .og-sample-tag")).length === N);

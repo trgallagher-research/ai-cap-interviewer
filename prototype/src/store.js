@@ -65,7 +65,7 @@
     try {
       const db = await getDb();
       if (db) {
-        await db.collection(COLLECTION).doc(profile.id).set(profile);
+        await db.collection(COLLECTION).doc(profile.id).set(JSON.parse(JSON.stringify(profile)));
         where.push("db");
         status.db = "available";
       } else {

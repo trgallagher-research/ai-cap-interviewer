@@ -82,9 +82,9 @@
   // Styles (scoped under .og-root / .nw-root; tokens only, plus the validated ladder ramp)
   // ---------------------------------------------------------------------------
   const CSS = `
-:root { --og-l0:#7DBCBD; --og-l1:#56A4A6; --og-l2:#378A8D; --og-l3:#1C6A6D; --og-l4:#0E4A4D; --og-band: rgba(15,110,114,0.10); --og-segtext:#FFFFFF; --og-segtext-light:#0B1F20; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --og-l0:#2A5E5F; --og-l1:#3A7F81; --og-l2:#4FA3A5; --og-l3:#7CC8CA; --og-l4:#B4E4E5; --og-band: rgba(95,194,196,0.14); --og-segtext:#0B1F20; --og-segtext-light:#EAF0EE; } }
-:root[data-theme="dark"] { --og-l0:#2A5E5F; --og-l1:#3A7F81; --og-l2:#4FA3A5; --og-l3:#7CC8CA; --og-l4:#B4E4E5; --og-band: rgba(95,194,196,0.14); --og-segtext:#0B1F20; --og-segtext-light:#EAF0EE; }
+:root { --og-l0:#7DBCBD; --og-l1:#56A4A6; --og-l2:#378A8D; --og-l3:#1C6A6D; --og-l4:#0E4A4D; --og-segtext:#FFFFFF; --og-segtext-light:#0B1F20; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --og-l0:#2A5E5F; --og-l1:#3A7F81; --og-l2:#4FA3A5; --og-l3:#7CC8CA; --og-l4:#B4E4E5; --og-segtext:#0B1F20; --og-segtext-light:#EAF0EE; } }
+:root[data-theme="dark"] { --og-l0:#2A5E5F; --og-l1:#3A7F81; --og-l2:#4FA3A5; --og-l3:#7CC8CA; --og-l4:#B4E4E5; --og-segtext:#0B1F20; --og-segtext-light:#EAF0EE; }
 
 .og-root { max-width: 72rem; margin: 0 auto; padding: 0 0 3rem; color: var(--fg); font-family: var(--font-body); }
 .og-root h1, .og-root h2, .og-root h3 { font-family: var(--font-display); font-weight: 500; margin: 0; }
@@ -133,8 +133,8 @@
 .og-chart text.tick { fill: var(--muted); font-size: 11px; }
 .og-chart text.lbl { fill: var(--fg-2); font-size: 11px; pointer-events: none; }
 .og-chart text.axisname { fill: var(--fg-2); font-size: 12px; }
-.og-chart .band { fill: var(--og-band); }
-.og-chart .bandline { stroke: var(--accent); stroke-width: 1; opacity: .5; }
+.og-chart .tickline { stroke: var(--muted); stroke-width: 1.5; }
+.og-chart .tickend { stroke: var(--muted); stroke-width: 1.5; }
 .og-chart .dot { cursor: pointer; outline: none; }
 .og-chart .dot .hit { fill: transparent; }
 .og-chart .dot .mark { stroke: var(--surface); stroke-width: 2; }
@@ -159,6 +159,7 @@
 .og-heat th.who { position: sticky; left: 0; background: var(--surface); z-index: 1; min-width: 10rem; }
 .og-heat tbody th.who { font-weight: 500; color: var(--fg); }
 .og-heat tbody th.who small { display: block; color: var(--muted); font-weight: 400; font-size: .75rem; }
+.og-heat tbody th.who small.noev { font-style: italic; }
 .og-heat td.cell { width: 3.2rem; padding: 3px; }
 .og-heat .hm { display: block; width: 100%; height: 1.6rem; border-radius: 4px; border: 0; background: var(--surface-2); padding: 0; cursor: default; }
 .og-heat .hm.has { cursor: pointer; }
@@ -395,7 +396,7 @@
     ]);
     const tiles = el("div", { class: "og-stats" }, [
       stat("Members interviewed", n, sampleN ? `${sampleN} of these are fictional samples` : "Real interviews so far"),
-      stat("Average confidence", stats.meanConfidence === null ? "n/a" : stats.meanConfidence, "Members rated 0 to 100 how sure they are they can do tasks from their own work", stats.meanConfidence === null ? "" : "/ 100"),
+      stat("Average confidence", stats.meanConfidence === null ? "n/a" : stats.meanConfidence, "Members rated 0 to 100 how sure they are they can do tasks from their own work. Members rated different tasks, so this is a rough comparison; the tasks' difficulty is taken into account in the marks below.", stats.meanConfidence === null ? "" : "/ 100"),
       stat("Sceptical or worried", scepticOrWorried, "Members whose overall stance on AI is doubtful or uneasy"),
       stat("Confidence out of step", above + below, `${above} rate themselves above what they described doing, ${below} below` + (unrated ? `; ${unrated} gave no ratings` : "")),
     ]);
@@ -432,13 +433,12 @@
       el("span", null, [legendMark("confident-starter"), KIND_LABEL["confident-starter"]]),
       el("span", null, [legendMark("cautious-practitioner"), KIND_LABEL["cautious-practitioner"]]),
       el("span", null, [legendMark("aligned"), KIND_LABEL["aligned"]]),
-      el("span", null, [el("i", { class: "og-sw", style: { background: "var(--og-band)", border: "1px solid var(--line)" } }), "expected range for that level"]),
+      el("span", null, [(() => { const t = svg("svg", { viewBox: "0 0 14 14", class: "og-chart", "aria-hidden": "true" }); t.appendChild(svg("line", { x1: 7, x2: 7, y1: 2, y2: 12, class: "tickline" })); t.appendChild(svg("line", { x1: 3, x2: 11, y1: 2, y2: 2, class: "tickend" })); return t; })(), "thin line: where their own rated tasks would predict their confidence"]),
     ]));
     const caption = el("p", { class: "og-caption" },
       "Each mark is one member. Left to right is how far AI use has gone in their work, from what they described; " +
-      "up and down is how confident they said they are. The shaded band is the typical confidence for someone at that level, as a rough guide. " +
-      "Members above the band rate themselves more confident than what they described doing; below it, less. " +
-      "The shape and colour of each mark come from that member's own rated tasks, which is more precise than the band, so a mark can sit just outside the band and still count as in step. " +
+      "up and down is how confident they said they are. The thin line under or over each mark runs from where that member's own rated tasks would predict their confidence (the short crossbar) to what they actually rated. " +
+      "A mark well above its crossbar means they rate themselves more confident than what they described doing; well below it, less; a short or absent line means the two are in step. " +
       "Hover or tab to a mark to see who it is; click it to open their details." +
       (noMean ? ` ${plural(noMean, "member")} gave no ratings and ${noMean === 1 ? "is" : "are"} not shown here.` : ""));
     return sectionEl("scatter", "Practice and confidence", "Where what people do and how sure they feel line up, and where they do not.", el("div", null, [wrap, caption]));
@@ -457,16 +457,6 @@
       chart.appendChild(svg("line", { x1: m.l, x2: W - m.r, y1: yv(v), y2: yv(v), class: "grid" }));
       chart.appendChild(svg("text", { x: m.l - 8, y: yv(v) + 4, "text-anchor": "end", class: "tick" }, String(v)));
     });
-    // expected band
-    const top = L.map((l, i) => `${xc(i)},${yv(Math.min(100, Eng.EXPECTED[i] + Eng.TOL))}`);
-    const bot = L.map((l, i) => `${xc(i)},${yv(Math.max(0, Eng.EXPECTED[i] - Eng.TOL))}`).reverse();
-    const xl = m.l, xr = W - m.r;
-    const topPts = [`${xl},${yv(Math.min(100, Eng.EXPECTED[0] + Eng.TOL))}`].concat(top, [`${xr},${yv(Math.min(100, Eng.EXPECTED[4] + Eng.TOL))}`]);
-    const botPts = [`${xr},${yv(Math.max(0, Eng.EXPECTED[4] - Eng.TOL))}`].concat(bot, [`${xl},${yv(Math.max(0, Eng.EXPECTED[0] - Eng.TOL))}`]);
-    chart.appendChild(svg("polygon", { points: topPts.concat(botPts).join(" "), class: "band" }, [svg("title", null, "Expected confidence for each level, give or take " + Eng.TOL + " points")]));
-    const mid = [`${xl},${yv(Eng.EXPECTED[0])}`].concat(L.map((l, i) => `${xc(i)},${yv(Eng.EXPECTED[i])}`), [`${xr},${yv(Eng.EXPECTED[4])}`]);
-    chart.appendChild(svg("polyline", { points: mid.join(" "), fill: "none", class: "bandline" }));
-    chart.appendChild(svg("text", { x: xr - 4, y: yv(Math.min(100, Eng.EXPECTED[4] + Eng.TOL)) - 6, "text-anchor": "end", class: "tick" }, "expected range"));
     // axes
     chart.appendChild(svg("line", { x1: m.l, x2: W - m.r, y1: m.t + ph, y2: m.t + ph, class: "axis" }));
     L.forEach((l, i) => {
@@ -477,6 +467,7 @@
     chart.appendChild(svg("text", { x: m.l + pw / 2, y: H - 8, "text-anchor": "middle", class: "axisname" }, narrow ? "Practice level (what they described doing)" : "Practice level, from what they described doing"));
     chart.appendChild(svg("text", { x: 12, y: m.t + ph / 2, "text-anchor": "middle", transform: `rotate(-90 12 ${m.t + ph / 2})`, class: "axisname" }, narrow ? "Confidence (0 to 100)" : "Average confidence (0 to 100)"));
 
+    const ticks = svg("g", { class: "ticks", "aria-hidden": "true" });
     const dots = svg("g", { class: "dots" });
     const withMean = profiles.filter((p) => meanOf(p) !== null);
     const placed = [];
@@ -485,14 +476,21 @@
       const jx = (hash(p.id + "x") - 0.5) * (bandW - 28);
       const jy = (hash(p.id + "y") - 0.5) * 6;
       const cx = xc(lv) + jx, cy = Math.min(m.t + ph - 6, Math.max(m.t + 6, yv(mean) + jy));
-      placed.push({ cx, cy, lv, kind, name: p.member.name });
+      let expected = null;
+      if (typeof E().divergenceFor === "function") { try { const d = E().divergenceFor(lv, p.confidence.items || []); if (d && Number.isFinite(d.expected)) expected = d.expected; } catch (_) { /* ignore */ } }
+      if (expected !== null) {
+        const ey = yv(expected);
+        ticks.appendChild(svg("line", { x1: cx, x2: cx, y1: ey, y2: cy, class: "tickline" }));
+        ticks.appendChild(svg("line", { x1: cx - 5, x2: cx + 5, y1: ey, y2: ey, class: "tickend" }));
+      }
+      placed.push({ cx, cy, lv, kind, name: p.member.name, expected });
       const g = svg("g", { class: `dot k-${kind}${isSample(p) ? " sample" : ""}`, tabindex: "0", role: "button", "data-id": p.id, "aria-label": `${p.member.name}, ${p.member.role}: ${levelLabel(lv)}, confidence ${mean}. ${KIND_LABEL[kind]}. Opens details.` });
       g.appendChild(svg("circle", { cx, cy, r: 14, class: "hit" }));
       const r = 6;
       if (kind === "confident-starter") g.appendChild(svg("polygon", { points: `${cx},${cy - r - 1} ${cx + r + 1},${cy + r} ${cx - r - 1},${cy + r}`, class: "mark" }));
       else if (kind === "cautious-practitioner") g.appendChild(svg("polygon", { points: `${cx},${cy + r + 1} ${cx + r + 1},${cy - r} ${cx - r - 1},${cy - r}`, class: "mark" }));
       else g.appendChild(svg("circle", { cx, cy, r: r, class: "mark" }));
-      const lines = [p.member.name + (isSample(p) ? " (sample)" : ""), p.member.role, `${levelLabel(lv)} (level ${lv}), confidence ${mean}`, KIND_LABEL[kind]];
+      const lines = [p.member.name + (isSample(p) ? " (sample)" : ""), p.member.role, `${levelLabel(lv)} (level ${lv}), confidence ${mean}` + (expected !== null ? `, their tasks would predict about ${expected}` : ""), KIND_LABEL[kind]];
       g.addEventListener("pointerenter", () => tip.showAt(g, lines));
       g.addEventListener("pointermove", () => tip.showAt(g, lines));
       g.addEventListener("pointerleave", tip.hide);
@@ -502,6 +500,7 @@
       g.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); openDetail(p); } });
       dots.appendChild(g);
     });
+    chart.appendChild(ticks);
     chart.appendChild(dots);
     // Name labels: to the right of each mark, nudged apart within a level band; narrow view labels only diverging marks.
     const labels = svg("g", { class: "labels", "aria-hidden": "true" });
@@ -539,7 +538,8 @@
       const lv = levelOf(p);
       const tr = el("tr");
       const nameBtn = el("button", { class: "btn quiet", type: "button", style: { padding: "0", font: "inherit", textAlign: "left" }, on: { click: () => openDetail(p) } }, p.member.name);
-      tr.appendChild(el("th", { class: "who", scope: "row" }, [nameBtn, isSample(p) ? " " : null, isSample(p) ? sampleTag() : null, el("small", null, `${p.member.role} · ${levelLabel(lv)}`)]));
+      const noEvidence = !(p.practice.domains || []).length;
+      tr.appendChild(el("th", { class: "who", scope: "row" }, [nameBtn, isSample(p) ? " " : null, isSample(p) ? sampleTag() : null, el("small", null, `${p.member.role} · ${levelLabel(lv)}`), noEvidence ? el("small", { class: "noev" }, lv === 0 ? "has not used AI tools" : "no specific uses described") : null]));
       D.forEach((d) => {
         const ev = (p.practice.domains || []).find((x) => x.key === d.key);
         const td = el("td", { class: "cell" });

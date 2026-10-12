@@ -69,7 +69,7 @@
       "There are no right answers. People who never use AI are as interesting to us as daily users."));
     wrap.appendChild(h("p", { class: "lead" },
       "Near the end you rate your confidence on a few tasks drawn from your own practice. " +
-      "You then get personal feedback you can act on. The organiser sees an anonymised overview of the whole network, not a transcript with your name on it."));
+      "You then get personal feedback you can act on. The organiser can read what you said, with your first name, and sees a map of the whole network built from everyone's interviews."));
 
     if (draft && draft.interview) {
       const d = draft.interview;
@@ -98,7 +98,7 @@
       h("label", { class: "field", htmlFor: "f-name" }, ["First name", name]),
       h("label", { class: "field", htmlFor: "f-role" }, ["Your role in one line", role]),
       err,
-      h("p", { class: "small" }, "Your answers are stored for the organiser's overview. Use a first name only. This is a prototype: treat it as a test, not a formal survey."),
+      h("p", { class: "small" }, "Your answers are saved for the organiser, either in the shared store or as a result code you send her yourself. Use a first name only and leave out client names. This is a prototype: treat it as a test, not a formal survey."),
       h("div", { class: "row" }, [
         h("button", { class: "btn primary", type: "submit", id: "btn-start" }, draft ? "Start a new interview" : "Start the interview"),
       ]),
@@ -250,6 +250,8 @@
     if (!text) return;
     S.interview.answer(text);
     ta.value = "";
+    const stale = document.getElementById("turn-error");
+    if (stale) { stale.hidden = true; stale.replaceChildren(); }
     chatEl().appendChild(bubble("member", text));
     scrollChat();
     window.Store.saveDraft(S.interview.toJSON());

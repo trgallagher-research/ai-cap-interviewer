@@ -150,7 +150,7 @@
   // ---------------------------------------------------------------------------
   // Interview state machine
   // ---------------------------------------------------------------------------
-  const LIMITS = { maxQuestionsBeforeRate: 16, minQuestionsBeforeRate: 6, maxAfterRate: 2 };
+  const LIMITS = { maxQuestionsBeforeRate: 16, minQuestionsBeforeRate: 6, maxAfterRate: 2, maxForcedRateAttempts: 2 };
 
   /** Interview holds the transcript and drives one turn at a time. UI-agnostic. */
   class Interview {
@@ -164,6 +164,7 @@
       this.interviewerCount = 0;
       this.afterRateCount = 0;
       this.rateRetries = 0;
+      this.forcedRateAttempts = 0; // forceRate nudges sent without a valid RATE marker coming back
       this.startedAt = new Date().toISOString();
     }
 
@@ -192,7 +193,12 @@
         return this.afterRateCount >= LIMITS.maxAfterRate ? P.NUDGES.forceClose : "";
       }
       if (this.rateItems) return ""; // waiting on the member's ratings; shouldn't be called
-      if (this.interviewerCount >= LIMITS.maxQuestionsBeforeRate) return P.NUDGES.forceRate;
+      if (this.interviewerCount >= LIMITS.maxQuestionsBeforeRate) {
+        // Two forced attempts without a valid marker: give up on ratings and close (profile is unrated).
+        if (this.forcedRateAttempts >= LIMITS.maxForcedRateAttempts) return P.NUDGES.forceClose;
+        this.forcedRateAttempts++;
+        return P.NUDGES.forceRate;
+      }
       return "";
     }
 
@@ -231,7 +237,8 @@
       this.interviewerCount++;
       if (this.ratings) this.afterRateCount++;
 
-      if (endNow || parsed.complete) {
+      const forcedClose = nudge === P.NUDGES.forceClose;
+      if (endNow || parsed.complete || forcedClose) {
         this.status = endNow ? "ended_early" : "complete";
         this.phase = "close";
       } else if (parsed.rateItems && !this.ratings) {
@@ -250,11 +257,11 @@
 
     /** Snapshot for persistence / resume. */
     toJSON() {
-      return { member: this.member, turns: this.turns, phase: this.phase, rateItems: this.rateItems, ratings: this.ratings, status: this.status, interviewerCount: this.interviewerCount, afterRateCount: this.afterRateCount, startedAt: this.startedAt };
+      return { member: this.member, turns: this.turns, phase: this.phase, rateItems: this.rateItems, ratings: this.ratings, status: this.status, interviewerCount: this.interviewerCount, afterRateCount: this.afterRateCount, rateRetries: this.rateRetries, forcedRateAttempts: this.forcedRateAttempts, startedAt: this.startedAt };
     }
     static fromJSON(o) {
       const iv = new Interview(o.member || {});
-      Object.assign(iv, o);
+      Object.assign(iv, o); if (typeof iv.rateRetries !== 'number') iv.rateRetries = 0; if (typeof iv.forcedRateAttempts !== 'number') iv.forcedRateAttempts = 0;
       return iv;
     }
   }
@@ -262,16 +269,18 @@
   // ---------------------------------------------------------------------------
   // Scoring
   // ---------------------------------------------------------------------------
-  // Expected confidence depends on how far each rated task sits beyond the member's described
-  // practice (a beginner rating a first-step task at 60 is accurate, not overconfident):
-  // task at or below their level → 82; one step beyond → 58; two → 38; three or more → 25.
+  // Expected confidence depends on the member's practice level and on how far each rated task
+  // sits beyond it (a beginner rating a first-step task at 60 is accurate, not overconfident).
+  // ITEM_TABLE gives the expected rating per (practice level, steps beyond); TOL is the tolerance,
+  // wider for levels 0 and 1 where ratings on untried tasks are noisier.
   // EXPECTED is the indicative band for a typical item set at each practice level, used by the
   // organiser's scatter; classification itself uses the member's own items (divergenceFor).
   const EXPECTED = { 0: 40, 1: 47, 2: 55, 3: 68, 4: 82 };
   const TOL = 18;
+  const TOL_BY_LEVEL = { 0: 22, 1: 22, 2: 18, 3: 18, 4: 18 };
   // Rows: practice level 0..4; columns: how many steps the task sits beyond that level (<=0, 1, 2, 3+).
   const ITEM_TABLE = {
-    0: [45, 45, 30, 20],
+    0: [55, 55, 35, 20],
     1: [65, 45, 30, 20],
     2: [75, 55, 35, 25],
     3: [82, 58, 38, 25],
@@ -299,7 +308,8 @@
     const mean = rated.reduce((a, x) => a + x.rating, 0) / rated.length;
     const expected = rated.reduce((a, x) => a + ITEM_EXPECTED(L, x.level - L), 0) / rated.length;
     const residual = Math.round(mean - expected);
-    let kind = residual > TOL ? "confident-starter" : residual < -TOL ? "cautious-practitioner" : "aligned";
+    const tol = TOL_BY_LEVEL[L];
+    let kind = residual >= tol ? "confident-starter" : residual <= -tol ? "cautious-practitioner" : "aligned";
     // Someone who has not used AI tools cannot be a cautious practitioner: low ratings are expected.
     if (kind === "cautious-practitioner" && L === 0) kind = "aligned";
     return { kind, note: NOTES[kind], expected: Math.round(expected), residual };

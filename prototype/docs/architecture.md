@@ -59,7 +59,7 @@ Visible text = everything before the first `<<`. Streaming shows only the safe p
 aligned-interviewer's `safeVisible`). When `<<RATE>>` arrives the page shows the rating widget; the member's
 ratings go back as a user turn formatted by `Prompts.formatRatingsTurn(items, ratings)`.
 Hard stops the page enforces regardless of the model: max 16 interviewer turns before forcing the rate phase (Engine.LIMITS);
-max 2 turns after ratings before forcing completion; "I'd like to stop" button → closing turn (`endNow`).
+at most 3 interviewer turns after ratings, the third forced to be a close; two forced rating requests without a valid marker end the interview unrated; "I'd like to stop" button → closing turn (`endNow`).
 
 ## Profile (the one record everything else reads) — `Profile`
 
@@ -114,7 +114,7 @@ max 2 turns after ratings before forcing completion; "I'd like to stop" button �
 `admin` Admin & organising · `building` Building tools, prompts or automations
 
 ### Divergence rule (computed in engine.js, not by the model)
-expected confidence per rated item depends on how far the task sits beyond the member's practice level: at or below → 82, one step beyond → 58, two → 38, three or more → 25; the expected mean is averaged over the member's items (±18 tolerance). No ratings → `unrated`.
+expected confidence per rated item depends on how far the task sits beyond the member's practice level: see ITEM_TABLE in engine.js (rows per practice level, columns per steps beyond it, e.g. level 2: 75/55/35/25); the expected mean is averaged over the member's items; tolerance 18, or 22 at levels 0 and 1; a non-user is never a cautious practitioner. No ratings → `unrated`.
 mean > expected+18 → `confident-starter`; mean < expected−18 → `cautious-practitioner`; else `aligned`.
 
 ## Storage (Store)
