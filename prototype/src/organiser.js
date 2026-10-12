@@ -132,9 +132,9 @@
 .og-chart .dot { cursor: pointer; outline: none; }
 .og-chart .dot .hit { fill: transparent; }
 .og-chart .dot .mark { stroke: var(--surface); stroke-width: 2; }
-.og-chart .dot.k-aligned .mark { fill: var(--surface); stroke: var(--muted); stroke-width: 2; }
-.og-chart .dot.k-confident-starter .mark { fill: var(--warm); }
-.og-chart .dot.k-cautious-practitioner .mark { fill: var(--accent); }
+.og-chart .k-aligned .mark { fill: var(--surface); stroke: var(--muted); stroke-width: 2; }
+.og-chart .k-confident-starter .mark { fill: var(--warm); stroke: var(--surface); }
+.og-chart .k-cautious-practitioner .mark { fill: var(--accent); stroke: var(--surface); }
 .og-chart .dot:hover .mark, .og-chart .dot:focus-visible .mark { stroke: var(--fg); }
 .og-chart .dot:focus-visible .hit { stroke: var(--accent); stroke-width: 2; }
 .og-chart .dot.sample .mark { stroke-dasharray: 2 2; }
@@ -468,7 +468,7 @@
     wrap.appendChild(chart);
     const legendMark = (kind) => {
       const s = svg("svg", { viewBox: "0 0 14 14", class: "og-chart", "aria-hidden": "true" });
-      const g = svg("g", { class: "dot k-" + kind });
+      const g = svg("g", { class: "lgmark k-" + kind });
       if (kind === "confident-starter") g.appendChild(svg("polygon", { points: "7,1 13,13 1,13", class: "mark", "stroke-width": "1" }));
       else if (kind === "cautious-practitioner") g.appendChild(svg("polygon", { points: "7,13 13,1 1,1", class: "mark", "stroke-width": "1" }));
       else g.appendChild(svg("circle", { cx: 7, cy: 7, r: 5, class: "mark", "stroke-width": "1.5" }));

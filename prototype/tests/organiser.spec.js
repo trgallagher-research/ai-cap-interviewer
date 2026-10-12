@@ -41,7 +41,7 @@ const SEED = [
     tools: ["ChatGPT"], items: [{ id: "r1", task: "Summarise a document", level: 1, rating: 90 }, { id: "r2", task: "Draft a mediation agreement", level: 2, rating: 66 }],
     wants: ["use AI to analyse interview notes"], offers: [], pay: "", quotes: ["It feels like magic, honestly."] }),
   profile({ id: "p_c", name: "Carla", role: "organisational adviser", level: 3, mean: 40, kind: "cautious-practitioner", stance: "cautious",
-    summary: "Integrated AI into analysis of survey results and documents, but doubts herself.", domains: [{ key: "analysis", evidence: "I feed it anonymised survey comments and ask for patterns." }, { key: "learning", evidence: "I read up on new methods with it." }, { key: "admin", evidence: "Meeting notes every week." }],
+    summary: "Integrated AI into analysis of survey results and documents, but doubts herself.", domains: [{ key: "analysis", evidence: "I feed it anonymised survey comments and ask for patterns." }, { key: "learning", evidence: "I read up on new methods with it." }],
     tools: ["Copilot"], items: [{ id: "r1", task: "Find patterns in survey comments", level: 3, rating: 45 }, { id: "r2", task: "Translate a report", level: 1, rating: 35 }],
     wants: ["get more confident with client material"], offers: ["can show my survey-analysis routine"], pay: "a checklist for client confidentiality", quotes: ["I never put a client name in."] }),
   profile({ id: "p_d", name: "Dirk", role: "trainer", level: 0, mean: 18, kind: "aligned", stance: "sceptical",
@@ -58,7 +58,7 @@ const SEED = [
     wants: ["prepare a workshop faster with AI"], offers: [], pay: "", quotes: ["It saves me an evening a week."], endedEarly: true }),
   profile({ id: "p_g", name: "Gijs", role: "adviser", level: 2, mean: null, kind: "aligned", stance: "worried",
     summary: "Uses it routinely for writing but worries about data.", domains: [{ key: "writing", evidence: "Emails and reports." }],
-    tools: ["Copilot"], items: [], wants: ["learn about data rules"], offers: [], pay: "", quotes: ["Where does the text go?"] }),
+    tools: ["Copilot"], items: [], wants: ["keep meeting notes with AI without leaking data"], offers: [], pay: "", quotes: ["Where does the text go?"] }),
 ];
 
 const PRODUCT_JSON = { verdict: "There is a small, real product: peer sessions on real cases, not generic training.", demand: ["3 members would pay for a peer half-day on real cases", "2 want help with client confidentiality"], options: [{ name: "Peer case half-day", forWhom: "integrated users", shape: "Four members bring a case. Facilitated.", evidence: "Anneke and Els asked for it", risk: "Small group" }, { name: "Confidentiality checklist", forWhom: "cautious users", shape: "One page. Workshop to introduce.", evidence: "Carla and Gijs", risk: "Hard to charge for" }], notSupported: ["A generic AI course"], nextTest: "Offer one paid half-day and count sign-ups." };
