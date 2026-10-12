@@ -150,7 +150,7 @@
   // ---------------------------------------------------------------------------
   // Interview state machine
   // ---------------------------------------------------------------------------
-  const LIMITS = { maxQuestionsBeforeRate: 14, minQuestionsBeforeRate: 6, maxAfterRate: 2 };
+  const LIMITS = { maxQuestionsBeforeRate: 16, minQuestionsBeforeRate: 6, maxAfterRate: 2 };
 
   /** Interview holds the transcript and drives one turn at a time. UI-agnostic. */
   class Interview {
@@ -262,20 +262,55 @@
   // ---------------------------------------------------------------------------
   // Scoring
   // ---------------------------------------------------------------------------
-  const EXPECTED = { 0: 20, 1: 40, 2: 58, 3: 72, 4: 82 };
+  // Expected confidence depends on how far each rated task sits beyond the member's described
+  // practice (a beginner rating a first-step task at 60 is accurate, not overconfident):
+  // task at or below their level → 82; one step beyond → 58; two → 38; three or more → 25.
+  // EXPECTED is the indicative band for a typical item set at each practice level, used by the
+  // organiser's scatter; classification itself uses the member's own items (divergenceFor).
+  const EXPECTED = { 0: 40, 1: 47, 2: 55, 3: 68, 4: 82 };
   const TOL = 18;
+  // Rows: practice level 0..4; columns: how many steps the task sits beyond that level (<=0, 1, 2, 3+).
+  const ITEM_TABLE = {
+    0: [45, 45, 30, 20],
+    1: [65, 45, 30, 20],
+    2: [75, 55, 35, 25],
+    3: [82, 58, 38, 25],
+    4: [82, 58, 38, 25],
+  };
+  const ITEM_EXPECTED = (L, delta) => ITEM_TABLE[L][delta <= 0 ? 0 : Math.min(delta, 3)];
 
   function band(mean) {
     if (mean === null || mean === undefined || !Number.isFinite(mean)) return "none";
     return mean < 40 ? "low" : mean > 70 ? "high" : "moderate";
   }
 
+  const NOTES = {
+    unrated: "No ratings were given, so confidence could not be compared with practice.",
+    "confident-starter": "Rates their confidence well above what their described practice would predict.",
+    "cautious-practitioner": "Rates their confidence well below what their described practice would predict.",
+    aligned: "Confidence and described practice are broadly in step.",
+  };
+
+  /** Level-aware classification from the member's own rated items. */
+  function divergenceFor(level, items, ratings) {
+    const L = clampInt(level, 0, 4, 0);
+    const rated = (items || []).map((it) => ({ level: clampInt(it.level, 1, 4, 2), rating: ratings ? ratings[it.id] : it.rating })).filter((x) => typeof x.rating === "number");
+    if (!rated.length) return { kind: "unrated", note: NOTES.unrated, expected: null, residual: null };
+    const mean = rated.reduce((a, x) => a + x.rating, 0) / rated.length;
+    const expected = rated.reduce((a, x) => a + ITEM_EXPECTED(L, x.level - L), 0) / rated.length;
+    const residual = Math.round(mean - expected);
+    let kind = residual > TOL ? "confident-starter" : residual < -TOL ? "cautious-practitioner" : "aligned";
+    // Someone who has not used AI tools cannot be a cautious practitioner: low ratings are expected.
+    if (kind === "cautious-practitioner" && L === 0) kind = "aligned";
+    return { kind, note: NOTES[kind], expected: Math.round(expected), residual };
+  }
+
+  /** Coarse fallback when only a mean is known (kept for callers that lack items). */
   function divergence(level, mean) {
-    if (!Number.isFinite(mean)) return { kind: "aligned", note: "No ratings were given, so confidence could not be compared with practice." };
+    if (!Number.isFinite(mean)) return { kind: "unrated", note: NOTES.unrated };
     const exp = EXPECTED[clampInt(level, 0, 4, 0)];
-    if (mean > exp + TOL) return { kind: "confident-starter", note: "Rates their confidence well above what their described practice would predict." };
-    if (mean < exp - TOL) return { kind: "cautious-practitioner", note: "Rates their confidence well below what their described practice would predict." };
-    return { kind: "aligned", note: "Confidence and described practice are broadly in step." };
+    const kind = mean > exp + TOL ? "confident-starter" : mean < exp - TOL ? "cautious-practitioner" : "aligned";
+    return { kind, note: NOTES[kind] };
   }
 
   function meanRating(items, ratings) {
@@ -311,7 +346,7 @@
         stance,
       },
       confidence: { items, mean, band: band(mean), pattern: String((m.confidence && m.confidence.pattern) || "") },
-      divergence: divergence(level, mean),
+      divergence: divergenceFor(level, interview.rateItems, interview.ratings),
       wants: Array.isArray(m.wants) ? m.wants.map(String).slice(0, 3) : [],
       offers: Array.isArray(m.offers) ? m.offers.map(String).slice(0, 2) : [],
       productSignals: { wouldPayFor: String((m.productSignals && m.productSignals.wouldPayFor) || ""), quote: String((m.productSignals && m.productSignals.quote) || "") },
@@ -335,7 +370,7 @@
     const byLevel = [0, 0, 0, 0, 0];
     const byDomain = {}; P.DOMAINS.forEach((d) => { byDomain[d.key] = 0; });
     const byStance = {}; P.STANCES.forEach((s) => { byStance[s] = 0; });
-    const byDivergence = { "aligned": 0, "confident-starter": 0, "cautious-practitioner": 0 };
+    const byDivergence = { "aligned": 0, "confident-starter": 0, "cautious-practitioner": 0, "unrated": 0 };
     const means = [];
     const wants = []; const offers = []; const pay = [];
     for (const p of profiles) {
@@ -365,9 +400,9 @@
     prep: ["prepar", "workshop", "session", "design", "programme", "training", "intervention"],
     analysis: ["analy", "summar", "interview", "survey", "pattern", "data", "document"],
     thinking: ["think", "case", "sparring", "reflect", "hypothes", "sounding"],
-    client: ["client", "in the room", "team", "live", "with a group"],
-    learning: ["learn", "research", "theory", "method", "course", "read"],
-    admin: ["admin", "plan", "schedul", "invoice", "notes", "organis", "translat"],
+    client: ["client", "in the room", "live with", "with a group", "with teams", "in front of"],
+    learning: ["research", "theory", "literature", "course", "reading", "keep up"],
+    admin: ["admin", "schedul", "invoice", "notes", "organis", "translat", "minutes"],
     building: ["build", "prompt", "automat", "tool", "gpt", "project", "script", "template"],
   };
 
@@ -382,5 +417,5 @@
     return out;
   }
 
-  window.Engine = { llm, Interview, LIMITS, safeVisible, parseTurn, parseRate, parsePhase, tryParseJson, band, divergence, meanRating, assembleProfile, stats, helpMap, newId, EXPECTED, TOL };
+  window.Engine = { llm, Interview, LIMITS, safeVisible, parseTurn, parseRate, parsePhase, tryParseJson, band, divergence, divergenceFor, meanRating, assembleProfile, stats, helpMap, newId, EXPECTED, TOL };
 })();

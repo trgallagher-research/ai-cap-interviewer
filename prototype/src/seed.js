@@ -545,7 +545,7 @@
       mean: 30, band: "low",
       pattern: "Low on both tasks he rated; the third (a board policy on AI and data) was not rated because he had to stop."
     },
-    divergence: { kind: "aligned", note: "Confidence and described practice are broadly in step." },
+    divergence: { kind: "cautious-practitioner", note: "Rates their confidence well below what their described practice would predict." },
     wants: ["know what is safe with staff and pupil data before anything else", "understand what it is doing to teachers' judgement, from someone who is not selling it"],
     offers: [],
     productSignals: {
@@ -871,11 +871,11 @@
     },
     confidence: {
       items: [
-        { id: "r1", task: "Open a free AI chat tool and ask it to summarise a one-page article on team development, then check the summary against the original.", level: 1, rating: 60 },
-        { id: "r2", task: "Type up your handwritten notes after a supervision session, with no names, and have the tool turn them into three questions for the next session.", level: 2, rating: 45 },
-        { id: "r3", task: "Ask it for three ways to open a team session where two subgroups are not talking, giving it only the general situation, and judge which is usable.", level: 2, rating: 30 }
+        { id: "r1", task: "Open a free AI chat tool and ask it to summarise a one-page article on team development, then check the summary against the original.", level: 1, rating: 80 },
+        { id: "r2", task: "Type up your handwritten notes after a supervision session, with no names, and have the tool turn them into three questions for the next session.", level: 2, rating: 70 },
+        { id: "r3", task: "Ask it for three ways to open a team session where two subgroups are not talking, giving it only the general situation, and judge which is usable.", level: 2, rating: 65 }
       ],
-      mean: 45, band: "moderate",
+      mean: 72, band: "high",
       pattern: "Fairly confident on first steps she has not taken, dropping as the task moves into her own sessions."
     },
     divergence: { kind: "confident-starter", note: "Rates their confidence well above what their described practice would predict." },

@@ -26,7 +26,7 @@ for (const p of SEED) {
     if (!(it.level >= 1 && it.level <= 4)) errs.push(`${n}: item level ${it.level}`);
     if (it.rating !== undefined) { if (!(it.rating >= 0 && it.rating <= 100 && it.rating % 5 === 0)) errs.push(`${n}: rating ${it.rating}`); ratings[it.id] = it.rating; }
   }
-  const mean = E.meanRating(items, ratings), band = E.band(mean), div = E.divergence(lvl, mean);
+  const mean = E.meanRating(items, ratings), band = E.band(mean), div = E.divergenceFor(lvl, items, ratings); if (!p.__printed) console.log(n.padEnd(8), 'L'+lvl, 'mean', mean, 'expected', div.expected, 'resid', div.residual, div.kind);
   if (mean !== p.confidence.mean) errs.push(`${n}: mean ${p.confidence.mean} should be ${mean}`);
   if (band !== p.confidence.band) errs.push(`${n}: band ${p.confidence.band} should be ${band}`);
   if (div.kind !== p.divergence.kind) errs.push(`${n}: divergence ${p.divergence.kind} should be ${div.kind}`);

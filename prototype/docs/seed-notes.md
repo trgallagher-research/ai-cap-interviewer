@@ -18,13 +18,13 @@ divergence, domain keys, level labels, stances, rating steps, unique ids). Today
 | seed_07 | Sanne | team coach, in-house at a hospital | in-house at a hospital | 1 Exploring | enthusiast | 70 | moderate | confident-starter | talks more than uses; 3 wants, 0 offers |
 | seed_08 | Pieter | organisational adviser, manufacturing and family-owned SMEs | small bureau | 2 Routine | sceptical | 55 | moderate | aligned | the sceptic who uses it anyway; would not pay for anything AI |
 | seed_09 | Lotte | trainer, conflict skills and feedback for teams | small bureau | 2 Routine | cautious | 36 | low | cautious-practitioner | weekly routine, rates low after a colleague called her prompts naive |
-| seed_10 | Tjeerd | interim director, schools and school boards | independent | 1 Exploring | worried | 30 | low | aligned | endedEarly; third item rating undefined (mean over 2 items) |
+| seed_10 | Tjeerd | interim director, schools and school boards | independent | 1 Exploring | worried | 30 | low | cautious-practitioner | endedEarly; third item rating undefined (mean over 2 items) |
 | seed_11 | Noor | executive coach and leadership team coach | independent | 3 Integrated | enthusiast | 75 | high | aligned | thinking-partner routine; 2 offers; only admin helper |
 | seed_12 | Harm | organisational adviser, water boards and provincial government | independent | 0 Not yet | worried | 20 | low | aligned | reads about it, never typed into one; one `learning` domain |
 | seed_13 | Esther | mediator, team mediation in healthcare and welfare | small bureau | 2 Routine | pragmatic | 61 | moderate | aligned | asked IT what is allowed; NotebookLM |
 | seed_14 | Kwame | organisational development adviser, in-house at a hogeschool | in-house at a university of applied sciences | 3 Integrated | pragmatic | 68 | moderate | aligned | Copilot/NotebookLM; client domain; 2 offers |
 | seed_15 | Wouter | trainer, communication and feedback skills for teams | small bureau | 1 Exploring | pragmatic | 45 | moderate | aligned | one concrete chore (retyping notes); wouldPayFor empty |
-| seed_16 | Ilse | team coach and supervisor, education and childcare | independent | 0 Not yet | pragmatic | 45 | moderate | confident-starter | non-user who expects to pick it up easily |
+| seed_16 | Ilse | team coach and supervisor, education and childcare | independent | 0 Not yet | pragmatic | 72 | high | confident-starter | non-user who expects to pick it up easily |
 
 Totals: byLevel [3, 4, 4, 4, 1]; byStance pragmatic 6, enthusiast 3, sceptical 3, cautious 2,
 worried 2; byDivergence aligned 12, confident-starter 2, cautious-practitioner 2; network mean

@@ -58,7 +58,7 @@ Each interviewer reply may end with control markers on their own lines (never sh
 Visible text = everything before the first `<<`. Streaming shows only the safe prefix (same rule as
 aligned-interviewer's `safeVisible`). When `<<RATE>>` arrives the page shows the rating widget; the member's
 ratings go back as a user turn formatted by `Prompts.formatRatingsTurn(items, ratings)`.
-Hard stops the page enforces regardless of the model: max 16 interviewer turns before forcing the rate phase;
+Hard stops the page enforces regardless of the model: max 16 interviewer turns before forcing the rate phase (Engine.LIMITS);
 max 2 turns after ratings before forcing completion; "I'd like to stop" button → closing turn (`endNow`).
 
 ## Profile (the one record everything else reads) — `Profile`
@@ -85,7 +85,7 @@ max 2 turns after ratings before forcing completion; "I'd like to stop" button �
     "pattern": "one sentence, e.g. confident on routine drafting, drops sharply on client-facing use"
   },
   "divergence": {
-    "kind": "aligned" | "confident-starter" | "cautious-practitioner",   // see rule below
+    "kind": "aligned" | "confident-starter" | "cautious-practitioner" | "unrated",   // see rule below
     "note": "one sentence"
   },
   "wants": ["learn to use AI with client material safely"],        // what they want to get better at
@@ -114,7 +114,7 @@ max 2 turns after ratings before forcing completion; "I'd like to stop" button �
 `admin` Admin & organising · `building` Building tools, prompts or automations
 
 ### Divergence rule (computed in engine.js, not by the model)
-expected confidence by level: 0→20, 1→40, 2→58, 3→72, 4→82 (±18 tolerance).
+expected confidence per rated item depends on how far the task sits beyond the member's practice level: at or below → 82, one step beyond → 58, two → 38, three or more → 25; the expected mean is averaged over the member's items (±18 tolerance). No ratings → `unrated`.
 mean > expected+18 → `confident-starter`; mean < expected−18 → `cautious-practitioner`; else `aligned`.
 
 ## Storage (Store)

@@ -12,7 +12,7 @@
   const E = () => window.Engine;
 
   const CSS = `
-.nw-root { max-width: 44rem; margin: 0 auto; padding: 0 16px 4rem; color: var(--fg); font-family: var(--font-body); line-height: 1.55; }
+.nw-root { max-width: 44rem; margin: 0 auto; padding: 0 0 3rem; color: var(--fg); font-family: var(--font-body); line-height: 1.55; }
 .nw-root h1, .nw-root h2 { font-family: var(--font-display); font-weight: 500; margin: 0; }
 .nw-root h1 { font-size: 1.9rem; line-height: 1.2; }
 .nw-root h2 { font-size: 1.25rem; margin: 1.75rem 0 .5rem; }
@@ -96,6 +96,14 @@
   }
 
   async function render(container) {
+    try { return await renderInner(container); }
+    catch (e) {
+      container.textContent = "";
+      container.appendChild(el("div", { class: "notice bad" }, "The share-back view hit an error: " + (e && e.message ? e.message : String(e))));
+      throw e;
+    }
+  }
+  async function renderInner(container) {
     ensureStyles();
     const profiles = await OV().loadProfiles();
     const stats = E().stats(profiles);

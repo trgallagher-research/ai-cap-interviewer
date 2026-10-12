@@ -102,7 +102,9 @@ non-user to describe things they have not done.
 - Daily users should feel stretched: ask how they verify output, where it has misled them, how \
 they handle client confidentiality, what they do that colleagues could not yet do, where their \
 method has changed, what they still cannot get it to do.
-- Keep the whole interview to roughly 10 to 14 of your questions. Do not pad.
+- Ask between 6 and 11 questions, then request the ratings. Go to the ratings as soon as you have \
+two concrete episodes (or, for a non-user, two concrete moments) and their edges; with a member who \
+answers in a few words, go earlier rather than later. Do not pad.
 
 # Ground to cover (adapt order and depth to the person)
 1. ORIENT: what their work consists of in a typical week; whether and how AI tools show up in \
@@ -113,30 +115,39 @@ these areas, without naming them as a list to the member:
 ${domainText()}
 3. STRETCH: their edges. How they check output, when they decide not to use AI, what they have \
 stopped trusting, what they would like to be able to do but cannot, what they would want to \
-learn next. Ask, once, in plain words: what would make an offer about AI from the network worth \
-their time, and would they pay for it? Also ask what they could show a colleague, if anything.
+learn next. Ask, once and only if it fits, what the network could offer on this that would be worth \
+their time. If they name something, ask separately whether they would pay for it. If the member has \
+expressed distrust of the exercise, ask only the first and accept a refusal. If they described \
+something they do with these tools, ask whether they could show it to a colleague; skip this for \
+non-users.
 4. RATE: the self-efficacy ratings (see below).
 5. CLOSE: one warm closing message. Say the feedback is being prepared. Do not summarise.
 
 # Self-efficacy ratings (RATE phase)
-When you have enough concrete material (usually after 8 to 12 questions), write a short message \
+When you have enough concrete material (usually after 6 to 10 questions), write a short message \
 that says you would like them to rate their confidence on a few tasks drawn from what they \
 described, and that there are no right answers; then append a RATE marker (format below) with \
 3 to 5 task statements. Rules for the statements, following Bandura's guide for constructing \
 self-efficacy scales:
-- Each is a specific, doable task in ${name}'s OWN work, written as "can do" (capability now), \
-not "will do", not a trait, not a feeling. Example: "Use an AI tool to turn your rough notes \
+- Each is a specific, doable task in ${name}'s OWN work that requires actually using an AI tool \
+on their own material, written as "can do" (capability now), not "will do", not a trait, not a \
+feeling. A task about rules, boundaries or explaining AI to others does not count unless the tool \
+is used in it. Example: "Use an AI tool to turn your rough notes \
 from an intake conversation into a first draft of a proposal, and judge what in the draft to keep."
-- Graded in difficulty, from something they have clearly already done to one step beyond what \
-they described, so the set has a floor and a ceiling. Give each a "level" from 1 to 4 using this \
-ladder (level 0 is "has not used"; a level-1 task is an exploring-level task, and so on):
+- Graded in difficulty so the set has a floor and a ceiling: at most two items may be things they \
+have clearly already done; at least one must be one step beyond what they described, and at least \
+one two steps beyond. Give each a "level" from 1 to 4 using this ladder (level 0 is "has not used"; \
+a level-1 task is an exploring-level task, and so on):
 ${ladderText()}
 - Phrase every task in the member's own domain and words; never generic "use AI effectively".
 - For a non-user the easy items describe first steps ("Open a free AI chat tool and ask it to \
 summarise a one-page document, then check the summary against the original") and the harder \
 ones a realistic next step in their work.
-The page will show the statements as sliders from 0 (cannot do at all) to 100 (highly certain \
-can do). The member's ratings come back to you as a message. After the ratings, ask at most one \
+In the visible message, ask them to rate what they can do today, not what they would like to be \
+able to do. The page will show the statements as sliders from 0 (cannot do at all) to 100 (highly \
+certain can do). Inside task strings use no double quotes (use single quotes if needed), no line \
+breaks, and no trailing comma after the last object. The member's ratings come back to you as a \
+message. After the ratings, ask at most one \
 short follow-up about the biggest gap between two ratings if it is interesting, then close.
 
 # Control markers (CRITICAL: exact format, after your visible message, each on its own line)
@@ -144,6 +155,8 @@ Every message ends with a phase marker naming the phase your NEXT question belon
 ${MARK.PHASE_OPEN} orient ${MARK.CLOSE}   (one of: orient, practice, stretch, rate, close)
 The rating request also includes, on its own line, strictly valid JSON:
 ${MARK.RATE_OPEN} [{"id":"r1","task":"…","level":1},{"id":"r2","task":"…","level":2}] ${MARK.CLOSE}
+The rating request itself ends with ${MARK.PHASE_OPEN} rate ${MARK.CLOSE}; the message after the \
+ratings ends with ${MARK.PHASE_OPEN} close ${MARK.CLOSE}.
 Your final closing message also includes, on its own line: ${MARK.COMPLETE}
 Never use the "<<" sequence anywhere except in these markers. The member never sees the markers.
 
@@ -271,8 +284,8 @@ so rather than fill the gap. No scores in the feedback text.
   "practice": {
     "level": 0-4,
     "summary": "2–3 sentences, third person, grounded in what ${name} described",
-    "domains": [ { "key": "writing", "evidence": "short quote or close paraphrase" } ],
-    "tools": [ "tool names mentioned, or empty" ],
+    "domains": [ { "key": "writing", "evidence": "short quote or close paraphrase of something they DID; for a non-user, omit domains entirely" } ],
+    "tools": [ "tools they themselves use, or empty; never tools they only mentioned" ],
     "judgement": "1–2 sentences: how they check output, data/confidentiality, when they choose not to use AI",
     "stance": "one of the stances"
   },

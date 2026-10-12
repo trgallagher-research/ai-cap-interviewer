@@ -104,7 +104,7 @@ window.Store = {
   loadAll: function () { try { return JSON.parse(localStorage.getItem("aiwd.profiles") || "[]"); } catch (e) { return []; } },
   save: function (p) { const a = this.loadAll(); a.push(p); localStorage.setItem("aiwd.profiles", JSON.stringify(a)); return { where: ["local"] }; },
   exportCode: function (p) { return JSON.stringify(p); },
-  importCode: function (text) { const p = JSON.parse(text); p.source = "imported"; this.save(p); return p; },
+  importCode: function (text) { const p = JSON.parse(text); p.source = "imported"; this.save(p); return { imported: [p], skipped: 0 }; },
   clearLocal: function () { localStorage.removeItem("aiwd.profiles"); },
 };
 window.SEED = ${JSON.stringify(SEED)};
@@ -153,7 +153,7 @@ function check(name, ok, extra) { if (ok) { passes++; console.log("  ok   " + na
     check("section " + id + " renders", await page.$("#" + id) !== null);
   }
   check("banner says 7 fictional members", (await page.textContent("#og-banner")).includes("fictional members are shown as samples"));
-  check("spread bar renders with 5 segments", (await page.$$("#og-summary .og-spreadbar rect")).length === 5);
+  check("spread bar renders with 5 segments", (await page.$$("#og-summary .og-spreadbar .seg")).length === 5);
   const withMean = SEED.filter((p) => p.confidence.mean !== null).length;
   check("scatter has one dot per rated profile (" + withMean + ")", (await page.$$("#og-scatter .dot")).length === withMean);
   check("scatter kinds present", (await page.$$("#og-scatter .dot.k-confident-starter")).length === 1 && (await page.$$("#og-scatter .dot.k-cautious-practitioner")).length === 1);
@@ -176,7 +176,7 @@ function check(name, ok, extra) { if (ok) { passes++; console.log("  ok   " + na
   check("scatter tooltip shows name", (await page.textContent("#og-scatter .og-tip")).includes("Bram"));
   // click dot opens detail
   await page.click("#og-scatter .dot[data-id='p_a']");
-  await page.waitForSelector("#og-drawer");
+  await page.waitForSelector("#og-drawer"); await page.waitForTimeout(300);
   const drawerText = await page.textContent("#og-drawer");
   check("detail panel opens with member name", drawerText.includes("Anneke"));
   check("detail shows confidence bars", (await page.$$("#og-drawer .og-bar")).length === 3);
@@ -248,7 +248,7 @@ function check(name, ok, extra) { if (ok) { passes++; console.log("  ok   " + na
   await page.waitForSelector("#og-summary");
   check("product read shows at rest from cache", (await page.$("#og-product .verdict")) !== null);
   await page.click("#og-scatter .dot[data-id='p_c']");
-  await page.waitForSelector("#og-drawer");
+  await page.waitForSelector("#og-drawer"); await page.waitForTimeout(300);
   await page.screenshot({ path: path.join(SHOTS, "desktop-dark-detail.png") });
   await page.keyboard.press("Escape");
   await page.screenshot({ path: path.join(SHOTS, "desktop-dark.png"), fullPage: true });
@@ -268,7 +268,7 @@ function check(name, ok, extra) { if (ok) { passes++; console.log("  ok   " + na
     check("no horizontal overflow at 400px (" + scheme + ")", overflow.sw <= overflow.cw, JSON.stringify(overflow));
     await page.screenshot({ path: path.join(SHOTS, "phone-" + scheme + ".png"), fullPage: true });
     await page.click("#og-members .og-member[data-id='p_e']");
-    await page.waitForSelector("#og-drawer");
+    await page.waitForSelector("#og-drawer"); await page.waitForTimeout(300);
     await page.screenshot({ path: path.join(SHOTS, "phone-" + scheme + "-detail.png") });
     await page.keyboard.press("Escape");
     await page.evaluate(() => __boot("network"));
@@ -280,6 +280,56 @@ function check(name, ok, extra) { if (ok) { passes++; console.log("  ok   " + na
   }
 
   check("no console errors", errors.length === 0, errors.join(" | "));
+
+  // ---- Integration pass: the real index.html with the real seed ------------------------
+  const INDEX = path.join(SRC, "index.html");
+  if (fs.existsSync(INDEX) && fs.existsSync(path.join(SRC, "seed.js"))) {
+    console.log("Integration pass (real index.html + seed.js)");
+    const realErrors = [];
+    for (const [scheme, vp] of [["light", { width: 1200, height: 900 }], ["dark", { width: 1200, height: 900 }], ["light", { width: 400, height: 800 }]]) {
+      const c = await browser.newContext({ viewport: vp, colorScheme: scheme });
+      const pg = await c.newPage();
+      pg.on("console", (m) => { if (m.type() === "error" && !/fonts.googleapis|net::ERR|Failed to load resource/.test(m.text())) realErrors.push("console: " + m.text()); });
+      pg.on("pageerror", (e) => realErrors.push("pageerror: " + e.message));
+      await pg.addInitScript(({ pr, sb }) => {
+        window.__mockSample = async function (messages) {
+          const text = messages[0].content;
+          if (/product read/i.test(text)) return { text: JSON.stringify(pr) };
+          if (/share-back/i.test(text)) return { text: JSON.stringify(sb) };
+          return { text: "{}" };
+        };
+      }, { pr: PRODUCT_JSON, sb: SHARE_JSON });
+      await pg.goto("file://" + INDEX + "#organiser");
+      await pg.waitForSelector("#og-members .og-member");
+      const seedN = await pg.evaluate(() => window.SEED.length);
+      const tag = scheme + "-" + vp.width;
+      check("real: members list has SEED.length cards (" + tag + ")", (await pg.$$("#og-members .og-member")).length === seedN);
+      check("real: heatmap rows = SEED.length (" + tag + ")", (await pg.$$("#og-heat tbody tr")).length === seedN);
+      const ov = await pg.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth }));
+      check("real: no horizontal overflow (" + tag + ")", ov.sw <= ov.cw, JSON.stringify(ov));
+      await pg.screenshot({ path: path.join(SHOTS, "real-organiser-" + tag + ".png"), fullPage: true });
+      await pg.click("#og-members .og-member");
+      await pg.waitForSelector("#og-drawer"); await pg.waitForTimeout(300);
+      await pg.screenshot({ path: path.join(SHOTS, "real-organiser-" + tag + "-detail.png") });
+      await pg.keyboard.press("Escape");
+      // import via a real export code
+      const code = await pg.evaluate(() => Store.exportCode(Object.assign({}, window.SEED[0], { id: "p_real_import", source: "live", member: { name: "Imported Iris", role: "coach", org: "" } })));
+      await pg.fill("#og-import textarea", code);
+      await pg.click("#og-import button.primary");
+      await pg.waitForFunction((n) => document.querySelectorAll("#og-members .og-member").length === n, seedN + 1);
+      check("real: import of Store.exportCode adds a row (" + tag + ")", (await pg.textContent("#og-members")).includes("Imported Iris"));
+      await pg.evaluate(() => App.navigate("network"));
+      await pg.waitForSelector("#nw-generate");
+      await pg.click("#nw-generate");
+      await pg.waitForSelector("#nw-copy");
+      check("real: share-back generates (" + tag + ")", (await pg.$$(".nw-try .row")).length === 3);
+      await pg.screenshot({ path: path.join(SHOTS, "real-network-" + tag + ".png"), fullPage: true });
+      await c.close();
+    }
+    check("real: no console errors", realErrors.length === 0, realErrors.join(" | "));
+  } else {
+    console.log("Integration pass skipped: index.html or seed.js not present yet");
+  }
   await browser.close();
   console.log(`\n${passes} passed, ${failures} failed`);
   process.exit(failures ? 1 : 0);

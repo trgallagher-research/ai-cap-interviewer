@@ -81,11 +81,11 @@
   // Styles (scoped under .og-root / .nw-root; tokens only, plus the validated ladder ramp)
   // ---------------------------------------------------------------------------
   const CSS = `
-:root { --og-l0:#7DBCBD; --og-l1:#56A4A6; --og-l2:#378A8D; --og-l3:#1C6A6D; --og-l4:#0E4A4D; --og-band: rgba(15,110,114,0.10); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --og-l0:#2A5E5F; --og-l1:#3A7F81; --og-l2:#4FA3A5; --og-l3:#7CC8CA; --og-l4:#B4E4E5; --og-band: rgba(95,194,196,0.14); } }
-:root[data-theme="dark"] { --og-l0:#2A5E5F; --og-l1:#3A7F81; --og-l2:#4FA3A5; --og-l3:#7CC8CA; --og-l4:#B4E4E5; --og-band: rgba(95,194,196,0.14); }
+:root { --og-l0:#7DBCBD; --og-l1:#56A4A6; --og-l2:#378A8D; --og-l3:#1C6A6D; --og-l4:#0E4A4D; --og-band: rgba(15,110,114,0.10); --og-segtext:#FFFFFF; --og-segtext-light:#0B1F20; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --og-l0:#2A5E5F; --og-l1:#3A7F81; --og-l2:#4FA3A5; --og-l3:#7CC8CA; --og-l4:#B4E4E5; --og-band: rgba(95,194,196,0.14); --og-segtext:#0B1F20; --og-segtext-light:#EAF0EE; } }
+:root[data-theme="dark"] { --og-l0:#2A5E5F; --og-l1:#3A7F81; --og-l2:#4FA3A5; --og-l3:#7CC8CA; --og-l4:#B4E4E5; --og-band: rgba(95,194,196,0.14); --og-segtext:#0B1F20; --og-segtext-light:#EAF0EE; }
 
-.og-root { max-width: 72rem; margin: 0 auto; padding: 0 16px 4rem; color: var(--fg); font-family: var(--font-body); }
+.og-root { max-width: 72rem; margin: 0 auto; padding: 0 0 3rem; color: var(--fg); font-family: var(--font-body); }
 .og-root h1, .og-root h2, .og-root h3 { font-family: var(--font-display); font-weight: 500; margin: 0; }
 .og-root h1 { font-size: 1.75rem; line-height: 1.2; }
 .og-root h2 { font-size: 1.3rem; line-height: 1.25; }
@@ -111,7 +111,11 @@
 .og-stat .hint { font-size: .8rem; color: var(--muted); }
 .og-spread { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); padding: .9rem 1rem; }
 .og-spread .title { font-size: .8rem; color: var(--fg-2); margin-bottom: .5rem; display: flex; justify-content: space-between; gap: .5rem; flex-wrap: wrap; }
-.og-spreadbar { width: 100%; height: auto; display: block; }
+.og-spreadbar { display: flex; gap: 2px; height: 30px; width: 100%; }
+.og-spreadbar .seg { flex: 1 1 0; min-width: 4px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: .8rem; font-weight: 600; }
+.og-spreadbar .seg-0 { background: var(--og-l0); } .og-spreadbar .seg-1 { background: var(--og-l1); } .og-spreadbar .seg-2 { background: var(--og-l2); } .og-spreadbar .seg-3 { background: var(--og-l3); } .og-spreadbar .seg-4 { background: var(--og-l4); }
+.og-spreadbar .seg span { color: var(--og-segtext); }
+.og-spreadbar .seg-0 span, .og-spreadbar .seg-1 span { color: var(--og-segtext-light); }
 .og-spreadlegend { display: flex; flex-wrap: wrap; gap: .4rem 1rem; margin-top: .6rem; font-size: .85rem; color: var(--fg-2); }
 .og-spreadlegend span { display: inline-flex; align-items: center; gap: .4rem; }
 .og-sw { width: .8rem; height: .8rem; border-radius: 3px; display: inline-block; flex: none; }
@@ -137,7 +141,7 @@
 .og-chart .k-cautious-practitioner .mark { fill: var(--accent); stroke: var(--surface); }
 .og-chart .dot:hover .mark, .og-chart .dot:focus-visible .mark { stroke: var(--fg); }
 .og-chart .dot:focus-visible .hit { stroke: var(--accent); stroke-width: 2; }
-.og-chart .dot.sample .mark { stroke-dasharray: 2 2; }
+.og-chart .dot.sample .mark { stroke-dasharray: 4 3; }
 .og-legend { display: flex; flex-wrap: wrap; gap: .4rem 1.1rem; font-size: .85rem; color: var(--fg-2); padding: .4rem .5rem .5rem; }
 .og-legend span { display: inline-flex; align-items: center; gap: .4rem; }
 .og-legend svg { width: 14px; height: 14px; }
@@ -200,8 +204,8 @@
 .og-pill-lv { display: inline-flex; align-items: center; gap: .35rem; }
 .og-pill-lv i { width: .6rem; height: .6rem; border-radius: 2px; display: inline-block; }
 .og-drawer-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 40; }
-.og-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(34rem, 100%); background: var(--surface); border-left: 1px solid var(--line); z-index: 41; overflow-y: auto; padding: 1.25rem 1.25rem 3rem; box-shadow: -4px 0 24px rgba(0,0,0,.18); color: var(--fg); }
-@media (prefers-reduced-motion: no-preference) { .og-drawer { animation: og-slide .18s ease-out; } @keyframes og-slide { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } } }
+.og-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(34rem, 100%); box-sizing: border-box; background: var(--surface); border-left: 1px solid var(--line); z-index: 41; overflow-y: auto; padding: 1.25rem 1.25rem 3rem; box-shadow: -4px 0 24px rgba(0,0,0,.18); color: var(--fg); }
+@media (prefers-reduced-motion: no-preference) { .og-drawer { animation: og-slide .18s ease-out; } @keyframes og-slide { from { transform: translateX(24px); } to { transform: none; } } }
 .og-drawer .top { display: flex; justify-content: space-between; align-items: flex-start; gap: .75rem; margin-bottom: .75rem; }
 .og-drawer .top h2 { font-family: var(--font-display); font-weight: 500; font-size: 1.4rem; margin: 0; }
 .og-drawer .top .role { color: var(--fg-2); }
@@ -240,7 +244,7 @@
 @media (max-width: 640px) {
   .og-root h1 { font-size: 1.45rem; }
   .og-stat .value { font-size: 1.6rem; }
-  .og-drawer { width: 100%; border-left: 0; }
+  .og-drawer { width: 100%; left: 0; border-left: 0; padding: 1rem 1rem 3rem; }
   .og-heat th.who { min-width: 8rem; }
 }
 `;
@@ -301,32 +305,22 @@
   // Shared drawings
   // ---------------------------------------------------------------------------
 
-  /** Practice-spread stacked bar: one horizontal bar, five ladder segments, counts inside when they fit. */
+  /** Practice-spread stacked bar: one horizontal bar of five ladder segments (HTML, so it reads at any width). */
   function drawSpreadBar(stats, opts) {
     opts = opts || {};
     const L = P().LADDER;
     const total = stats.byLevel.reduce((a, b) => a + b, 0) || 1;
-    const W = 720, H = 56, barH = 28, y = 4, gap = 2;
-    const root = svg("svg", { viewBox: `0 0 ${W} ${H}`, class: "og-spreadbar", role: "img", "aria-label": "Practice spread: " + L.map((l, i) => stats.byLevel[i] + " " + l.label).join(", ") });
-    let x = 0;
-    const labelY = y + barH + 16;
+    const bar = el("div", { class: "og-spreadbar", role: "img", "aria-label": "Practice spread: " + L.map((l, i) => stats.byLevel[i] + " " + l.label).join(", ") });
     stats.byLevel.forEach((n, i) => {
-      const w = (n / total) * W;
-      if (n > 0) {
-        const rw = Math.max(0, w - gap);
-        root.appendChild(svg("rect", { x: x, y: y, width: rw, height: barH, rx: 4, fill: `var(--og-l${i})` }, [svg("title", null, `${L[i].label}: ${plural(n, "member")}`)]));
-        if (rw >= 22) {
-          root.appendChild(svg("text", { x: x + rw / 2, y: y + barH / 2 + 4, "text-anchor": "middle", style: `fill:${i >= 2 ? "#FFFFFF" : "#0B1F20"};font-size:12px;font-weight:600` }, String(n)));
-        }
-        if (rw >= 60 || (rw >= 40 && L[i].label.length <= 8)) {
-          root.appendChild(svg("text", { x: x + rw / 2, y: labelY, "text-anchor": "middle", class: "tick" }, L[i].label));
-        }
-      }
-      x += w;
+      if (!n) return;
+      const pct = (n / total) * 100;
+      const seg = el("div", { class: "seg seg-" + i, style: { flexGrow: String(n) }, title: `${L[i].label}: ${plural(n, "member")}` });
+      if (pct >= 6) seg.appendChild(el("span", null, String(n)));
+      bar.appendChild(seg);
     });
     const wrap = el("div", { class: "og-spread" });
     if (!opts.bare) wrap.appendChild(el("div", { class: "title" }, [el("span", null, "Practice spread: how far AI use has gone in each member's work"), el("span", null, plural(total, "member"))]));
-    wrap.appendChild(root);
+    wrap.appendChild(bar);
     wrap.appendChild(el("div", { class: "og-spreadlegend", "aria-hidden": "true" }, L.map((l, i) => el("span", null, [el("i", { class: "og-sw", style: { background: `var(--og-l${i})` } }), `${l.label} (${stats.byLevel[i]})`]))));
     return wrap;
   }
@@ -406,8 +400,47 @@
   }
 
   function scatterSection(profiles, openDetail) {
+    const wrap = el("div", { class: "og-chartwrap" });
+    const tip = makeTip(wrap);
+    const noMean = profiles.filter((p) => meanOf(p) === null).length;
+    let narrowNow = null;
+    function draw() {
+      const narrow = (wrap.clientWidth || window.innerWidth) < 560;
+      if (narrow === narrowNow) return;
+      narrowNow = narrow;
+      const old = wrap.querySelector("svg.og-chart"); if (old) old.remove();
+      wrap.insertBefore(drawScatter(profiles, openDetail, tip, narrow), wrap.firstChild);
+    }
+    if (typeof ResizeObserver === "function") new ResizeObserver(draw).observe(wrap);
+    else window.addEventListener("resize", draw);
+    setTimeout(draw, 0);
+    draw();
+    const legendMark = (kind) => {
+      const s = svg("svg", { viewBox: "0 0 14 14", class: "og-chart", "aria-hidden": "true" });
+      const g = svg("g", { class: "lgmark k-" + kind });
+      if (kind === "confident-starter") g.appendChild(svg("polygon", { points: "7,1 13,13 1,13", class: "mark", "stroke-width": "1" }));
+      else if (kind === "cautious-practitioner") g.appendChild(svg("polygon", { points: "7,13 13,1 1,1", class: "mark", "stroke-width": "1" }));
+      else g.appendChild(svg("circle", { cx: 7, cy: 7, r: 5, class: "mark", "stroke-width": "1.5" }));
+      s.appendChild(g); return s;
+    };
+    wrap.appendChild(el("div", { class: "og-legend", "aria-label": "Legend" }, [
+      el("span", null, [legendMark("confident-starter"), KIND_LABEL["confident-starter"]]),
+      el("span", null, [legendMark("cautious-practitioner"), KIND_LABEL["cautious-practitioner"]]),
+      el("span", null, [legendMark("aligned"), KIND_LABEL["aligned"]]),
+      el("span", null, [el("i", { class: "og-sw", style: { background: "var(--og-band)", border: "1px solid var(--line)" } }), "expected range for that level"]),
+    ]));
+    const caption = el("p", { class: "og-caption" },
+      "Each mark is one member. Left to right is how far AI use has gone in their work, from what they described; " +
+      "up and down is how confident they said they are. The shaded band is the confidence we would expect at each level. " +
+      "Members above the band rate themselves more confident than what they described doing; below it, less. " +
+      "Hover or tab to a mark to see who it is; click it to open their details." +
+      (noMean ? ` ${plural(noMean, "member")} gave no ratings and ${noMean === 1 ? "is" : "are"} not shown here.` : ""));
+    return sectionEl("scatter", "Practice and confidence", "Where what people do and how sure they feel line up, and where they do not.", el("div", null, [wrap, caption]));
+  }
+
+  function drawScatter(profiles, openDetail, tip, narrow) {
     const Eng = E(); const L = P().LADDER;
-    const W = 720, H = 400, m = { t: 20, r: 20, b: 58, l: 46 };
+    const W = narrow ? 400 : 720, H = narrow ? 360 : 400, m = narrow ? { t: 16, r: 10, b: 56, l: 40 } : { t: 20, r: 20, b: 58, l: 46 };
     const pw = W - m.l - m.r, ph = H - m.t - m.b;
     const bandW = pw / 5;
     const xc = (lv) => m.l + bandW * lv + bandW / 2;
@@ -424,25 +457,22 @@
     const xl = m.l, xr = W - m.r;
     const topPts = [`${xl},${yv(Math.min(100, Eng.EXPECTED[0] + Eng.TOL))}`].concat(top, [`${xr},${yv(Math.min(100, Eng.EXPECTED[4] + Eng.TOL))}`]);
     const botPts = [`${xr},${yv(Math.max(0, Eng.EXPECTED[4] - Eng.TOL))}`].concat(bot, [`${xl},${yv(Math.max(0, Eng.EXPECTED[0] - Eng.TOL))}`]);
-    chart.appendChild(svg("polygon", { points: topPts.concat(botPts).join(" "), class: "band" }, [svg("title", null, "Expected confidence for each level, give or take 18 points")]));
+    chart.appendChild(svg("polygon", { points: topPts.concat(botPts).join(" "), class: "band" }, [svg("title", null, "Expected confidence for each level, give or take " + Eng.TOL + " points")]));
     const mid = [`${xl},${yv(Eng.EXPECTED[0])}`].concat(L.map((l, i) => `${xc(i)},${yv(Eng.EXPECTED[i])}`), [`${xr},${yv(Eng.EXPECTED[4])}`]);
     chart.appendChild(svg("polyline", { points: mid.join(" "), fill: "none", class: "bandline" }));
     chart.appendChild(svg("text", { x: xr - 4, y: yv(Math.min(100, Eng.EXPECTED[4] + Eng.TOL)) - 6, "text-anchor": "end", class: "tick" }, "expected range"));
     // axes
     chart.appendChild(svg("line", { x1: m.l, x2: W - m.r, y1: m.t + ph, y2: m.t + ph, class: "axis" }));
     L.forEach((l, i) => {
-      chart.appendChild(svg("text", { x: xc(i), y: m.t + ph + 18, "text-anchor": "middle" }, l.label));
-      chart.appendChild(svg("text", { x: xc(i), y: m.t + ph + 32, "text-anchor": "middle", class: "tick" }, "level " + i));
+      chart.appendChild(svg("text", { x: xc(i), y: m.t + ph + 16, "text-anchor": "middle", class: narrow ? "tick" : "" }, l.label));
+      chart.appendChild(svg("text", { x: xc(i), y: m.t + ph + 30, "text-anchor": "middle", class: "tick" }, "level " + i));
       if (i > 0) chart.appendChild(svg("line", { x1: m.l + bandW * i, x2: m.l + bandW * i, y1: m.t, y2: m.t + ph, class: "grid", "stroke-dasharray": "0" }));
     });
-    chart.appendChild(svg("text", { x: m.l + pw / 2, y: H - 8, "text-anchor": "middle", class: "axisname" }, "Practice level, from what they described doing"));
-    chart.appendChild(svg("text", { x: 12, y: m.t + ph / 2, "text-anchor": "middle", transform: `rotate(-90 12 ${m.t + ph / 2})`, class: "axisname" }, "Average confidence (0 to 100)"));
+    chart.appendChild(svg("text", { x: m.l + pw / 2, y: H - 8, "text-anchor": "middle", class: "axisname" }, narrow ? "Practice level (what they described doing)" : "Practice level, from what they described doing"));
+    chart.appendChild(svg("text", { x: 12, y: m.t + ph / 2, "text-anchor": "middle", transform: `rotate(-90 12 ${m.t + ph / 2})`, class: "axisname" }, narrow ? "Confidence (0 to 100)" : "Average confidence (0 to 100)"));
 
-    const wrap = el("div", { class: "og-chartwrap" });
-    const tip = makeTip(wrap);
     const dots = svg("g", { class: "dots" });
     const withMean = profiles.filter((p) => meanOf(p) !== null);
-    const noMean = profiles.length - withMean.length;
     withMean.forEach((p) => {
       const lv = levelOf(p); const mean = meanOf(p); const kind = kindOf(p);
       const jx = (hash(p.id + "x") - 0.5) * (bandW - 28);
@@ -465,28 +495,7 @@
       dots.appendChild(g);
     });
     chart.appendChild(dots);
-    wrap.appendChild(chart);
-    const legendMark = (kind) => {
-      const s = svg("svg", { viewBox: "0 0 14 14", class: "og-chart", "aria-hidden": "true" });
-      const g = svg("g", { class: "lgmark k-" + kind });
-      if (kind === "confident-starter") g.appendChild(svg("polygon", { points: "7,1 13,13 1,13", class: "mark", "stroke-width": "1" }));
-      else if (kind === "cautious-practitioner") g.appendChild(svg("polygon", { points: "7,13 13,1 1,1", class: "mark", "stroke-width": "1" }));
-      else g.appendChild(svg("circle", { cx: 7, cy: 7, r: 5, class: "mark", "stroke-width": "1.5" }));
-      s.appendChild(g); return s;
-    };
-    wrap.appendChild(el("div", { class: "og-legend", "aria-label": "Legend" }, [
-      el("span", null, [legendMark("confident-starter"), KIND_LABEL["confident-starter"]]),
-      el("span", null, [legendMark("cautious-practitioner"), KIND_LABEL["cautious-practitioner"]]),
-      el("span", null, [legendMark("aligned"), KIND_LABEL["aligned"]]),
-      el("span", null, [el("i", { class: "og-sw", style: { background: "var(--og-band)", border: "1px solid var(--line)" } }), "expected range for that level"]),
-    ]));
-    const caption = el("p", { class: "og-caption" },
-      "Each mark is one member. Left to right is how far AI use has gone in their work, from what they described; " +
-      "up and down is how confident they said they are. The shaded band is the confidence we would expect at each level. " +
-      "Members above the band rate themselves more confident than what they described doing; below it, less. " +
-      "Hover or tab to a mark to see who it is; click it to open their details." +
-      (noMean ? ` ${plural(noMean, "member")} gave no ratings and ${noMean === 1 ? "is" : "are"} not shown here.` : ""));
-    return sectionEl("scatter", "Practice and confidence", "Where what people do and how sure they feel line up, and where they do not.", el("div", null, [wrap, caption]));
+    return chart;
   }
 
   function heatmapSection(profiles, stats, openDetail) {
@@ -687,9 +696,10 @@
       if (!S || typeof S.importCode !== "function") { msg.className = "msg bad"; msg.textContent = "The shared store is not loaded in this page, so nothing can be imported."; return; }
       try {
         let r = S.importCode(text); if (r && typeof r.then === "function") r = await r;
-        if (r === false || r === null) throw new Error("that does not look like a result code");
-        const name = r && r.member && r.member.name;
-        toast(name ? name + " imported" : "Result imported");
+        // Store.importCode returns {imported:[profiles], skipped}; tolerate a bare profile too.
+        const list = (r && Array.isArray(r.imported)) ? r.imported : (r && r.member ? [r] : []);
+        if (!list.length) throw new Error("no valid result code was found in the text" + (r && r.skipped ? ` (${r.skipped} skipped)` : ""));
+        toast(list.length === 1 ? (list[0].member.name || "Result") + " imported" : `${list.length} results imported`);
         ta.value = "";
         await rerender({ scrollTo: "og-members" });
       } catch (e) { msg.className = "msg bad"; msg.textContent = "Could not import: " + (e && e.message ? e.message : String(e)); }
@@ -827,6 +837,14 @@
   // Render
   // ---------------------------------------------------------------------------
   async function render(container, opts) {
+    try { return await renderInner(container, opts); }
+    catch (e) {
+      container.textContent = "";
+      container.appendChild(el("div", { class: "notice bad" }, "The organiser view hit an error: " + (e && e.message ? e.message : String(e))));
+      throw e;
+    }
+  }
+  async function renderInner(container, opts) {
     opts = opts || {};
     ensureStyles();
     closeDetail();
