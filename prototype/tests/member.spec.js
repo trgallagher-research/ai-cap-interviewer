@@ -21,7 +21,7 @@ function serve() {
       let body = fs.readFileSync(file);
       if (p === "/index.html") {
         // Mimic the artifact publish skeleton.
-        body = Buffer.from('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>[hidden]{display:none!important}</style></head><body>' + body.toString() + "</body></html>");
+        body = Buffer.from('<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"></head><body>' + body.toString() + "</body></html>");
       }
       res.writeHead(200, { "content-type": MIME[path.extname(file)] || "application/octet-stream" });
       res.end(body);

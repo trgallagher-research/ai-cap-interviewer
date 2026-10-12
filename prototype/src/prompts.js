@@ -94,7 +94,7 @@
         { key: "pragmatic",  label: "Practical: useful for some things, not others" },
         { key: "cautious",   label: "Careful: open to it, with reservations" },
         { key: "sceptical",  label: "Doubtful: not convinced it helps my kind of work" },
-        { key: "worried",    label: "Uneasy: I worry about what it does" },
+        { key: "worried",    label: "Uneasy: I have concerns (clients, data, quality of thinking)" },
       ],
     },
     offer: {
@@ -106,16 +106,18 @@
         { key: "confidentiality", label: "A checklist for using it safely with client material" },
         { key: "prompt-library", label: "A shared library of prompts from colleagues" },
         { key: "demos",          label: "Short demos from colleagues" },
-        { key: "nothing",        label: "Nothing for now", exclusive: true },
+        { key: "when-not",       label: "A conversation about whether and when not to use it (clients, data, ethics)" },
+        { key: "nothing",        label: "Nothing on AI for now", exclusive: true },
       ],
     },
     pay: {
-      id: "pay", type: "single", skipIf: { offer: ["nothing"] },
-      label: "Would you pay for something like that?",
+      id: "pay", type: "single", skipIf: { offer: ["nothing"] }, skipIfEmpty: ["offer"],
+      label: "Would you pay for what you ticked?",
       options: [
-        { key: "yes",   label: "Yes, if it fits my work" },
-        { key: "maybe", label: "Maybe, depending on price" },
-        { key: "no",    label: "No" },
+        { key: "yes",    label: "Yes" },
+        { key: "maybe",  label: "Possibly" },
+        { key: "no",     label: "No" },
+        { key: "unsure", label: "Don't know yet" },
       ],
     },
     canShow: {
@@ -133,7 +135,12 @@
   /** True when a question should be skipped given the answers so far. */
   function questionSkipped(qid, answers) {
     const q = QUESTIONNAIRE[qid];
-    if (!q || !q.skipIf) return false;
+    if (!q) return false;
+    if (Array.isArray(q.skipIfEmpty) && q.skipIfEmpty.some((dep) => {
+      const v = answers ? answers[dep] : undefined;
+      return !(Array.isArray(v) ? v.length : v);
+    })) return true;
+    if (!q.skipIf) return false;
     return Object.keys(q.skipIf).some((dep) => {
       const v = answers ? answers[dep] : undefined;
       const vals = Array.isArray(v) ? v : (v ? [v] : []);
@@ -159,7 +166,7 @@
       if (Array.isArray(v)) txt = v.length ? v.map((k) => optionLabel(qid, k)).join("; ") : "(none ticked)";
       else txt = v ? optionLabel(qid, v) : "(not answered)";
       const other = a[qid + "Other"];
-      if (other) txt += (txt ? "; " : "") + "other: " + other;
+      if (other) txt = (Array.isArray(v) && !v.length ? "" : txt + "; ") + "other: " + other;
       lines.push(`- ${q.label} ${txt}`);
     }
     return lines.join("\n");
@@ -180,7 +187,11 @@
   function buildInterviewSystem(member, answers) {
     const name = (member && member.name) ? member.name.trim() : "the member";
     const role = (member && member.role) ? member.role.trim() : "a member of the network";
-    const nonUser = answers && answers.frequency === "never";
+    const ticked = answers && Array.isArray(answers.uses) ? answers.uses.length : 0;
+    // Routing decided in code: never-users, and members who tried it but ticked no area, take the
+    // non-user path. Doubtful or uneasy members who do use AI keep the practice path.
+    const nonUser = !!answers && (answers.frequency === "never" || (answers.frequency === "tried" && ticked === 0));
+    const doubtful = !!answers && (answers.stance === "sceptical" || answers.stance === "worried");
     return `\
 You are conducting a one-to-one interview, in English, for the AI at Work Diagnostic run by \
 Systeeminterventies, a Dutch network of managers, advisers, trainers and coaches who work on \
@@ -231,13 +242,13 @@ once inside an episode ("Which tool was that?").
 ${formatQuestionnaire(answers)}
 
 # Ground to cover (adapt to the person)
-${nonUser ? `${name} has not used AI tools in their work. Ask about two concrete moments: one where \
-AI came up (a colleague, a client, an article, a tool their organisation introduced) and what \
+${nonUser ? `${name} has ${answers.frequency === "never" ? "not used AI tools in their work" : "tried AI tools once or a few times but named no area of their work where they use them"}. \
+Ask about two concrete moments: ${answers.frequency === "never" ? "" : "the most recent time they tried it and what happened, or "}one where AI came up (a colleague, a client, an article, a tool their organisation introduced) and what \
 happened; then what stops them or what they would need to see to try it, taking the answer as it \
-comes. Then go to the ratings with first-step items.` : `If they ticked no areas, or chose Doubtful \
-or Uneasy, start from the most recent time they tried it, then a time they saw others use it, as \
-for a non-user, and take what comes without pushing.
-1. PRACTICE: ask for the most recent real instance in the area they ticked that looks most \
+comes. Never try to convince them. Then go to the ratings with first-step items.` : `${doubtful ? `They \
+said they feel ${answers.stance === "worried" ? "uneasy" : "doubtful"} about AI. Do not pitch or reassure; \
+in the stretch questions, ask what their concern is grounded in, in their own work.
+` : ""}1. PRACTICE: ask for the most recent real instance in the area they ticked that looks most \
 central to their work: what task, which tool, what they typed, what came back, what they did with \
 it. Probe once or twice for specifics. Then ask for one more episode in the ticked area that looks \
 least supported by what you have heard so far (often building tools, analysis, or work with \
@@ -297,7 +308,7 @@ The member can tap one or still type. Never use chips on the rating request or t
 Never use the "<<" sequence anywhere except in these markers. The member never sees the markers.
 
 Begin now: greet ${name} by name in one sentence, say in one sentence that you would like to hear \
-${nonUser ? "how AI has or hasn't come up around their work" : "about a few real examples behind their answers"}, \
+${nonUser ? "how AI has or hasn't come up around their work" : "about one or two real examples from their work"}, \
 and ask your first question.`;
   }
 
@@ -340,14 +351,14 @@ and ask your first question.`;
     forceRate:
       "(Instruction from the page: enough material has been gathered. Do not ask another question. " +
       "Write the short rating request now and append the RATE marker with 3 to 5 graded task statements " +
-      "drawn from what has been said, then the phase marker rate.)",
+      "drawn from what has been said, each with id, task, level and beyond, then the phase marker rate.)",
     forceClose:
       "(Instruction from the page: close the interview now in one warm message, with the phase marker " +
       `close and ${MARK.COMPLETE}. Do not ask another question.)`,
     missingRate:
       "(Instruction from the page: your last message did not include a valid RATE marker. Repeat a " +
       "one-sentence rating request and append a valid RATE marker: strictly valid JSON array of 3 to 5 " +
-      "objects with id, task and level.)",
+      "objects with id, task, level and beyond (0 = done before, 1 = one step beyond, 2 = two steps beyond).)",
   };
 
   /** Format the member's slider answers as the user turn the interviewer reads. */

@@ -391,7 +391,18 @@
   function showChips(chips) {
     const box = document.getElementById("chips");
     if (!box || S.rateCardEl || !S.interview || S.interview.status !== "in_progress") return;
-    box.replaceChildren(...chips.map((t) => h("button", { class: "chip", type: "button", on: { click: () => sendText(t, { tapped: true }) } }, t)));
+    const isOpen = (t) => /^something else\b|^other\b/i.test(t.trim());
+    box.replaceChildren(...chips.map((t) => h("button", { class: "chip" + (isOpen(t) ? " chip-open" : ""), type: "button", on: { click: () => {
+      if (isOpen(t)) { // an open option: let the member type their own answer
+        clearChips();
+        const ta = document.getElementById("answer");
+        if (ta) { try { ta.focus(); } catch (_) { /* ignore */ } }
+        return;
+      }
+      const ta = document.getElementById("answer");
+      if (ta && ta.value.trim()) return sendText(ta.value, {}) && (ta.value = ""); // typed text wins over a tap
+      sendText(t, { tapped: true });
+    } } }, t)));
     box.hidden = false;
     scrollChat();
   }

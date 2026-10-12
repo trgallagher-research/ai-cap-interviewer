@@ -449,7 +449,7 @@
       (p.offers || []).forEach((o) => offers.push(o));
       if (p.productSignals && p.productSignals.wouldPayFor) pay.push(p.productSignals.wouldPayFor);
     }
-    const q = { frequency: {}, offer: {}, pay: { yes: 0, maybe: 0, no: 0 }, selfDomains: {}, claimedNoEpisode: {}, probedNoEpisode: {}, answered: 0 };
+    const q = { frequency: {}, offer: {}, pay: { yes: 0, maybe: 0, no: 0, unsure: 0 }, selfDomains: {}, claimedNoEpisode: {}, probedNoEpisode: {}, answered: 0 };
     (P.QUESTIONNAIRE.frequency.options).forEach((o) => { q.frequency[o.key] = 0; });
     (P.QUESTIONNAIRE.offer.options).forEach((o) => { q.offer[o.key] = 0; });
     P.DOMAINS.forEach((d) => { q.selfDomains[d.key] = 0; q.claimedNoEpisode[d.key] = 0; q.probedNoEpisode[d.key] = 0; });
