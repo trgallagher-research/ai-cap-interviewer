@@ -195,7 +195,11 @@
 .og-paybar .seg:focus-visible, .og-paybar .seg:hover { outline: 2px solid var(--fg); outline-offset: 1px; }
 .og-paybar .seg.yes, .og-sw.yes { background: var(--warm); }
 .og-paybar .seg.maybe, .og-sw.maybe { background: var(--accent); }
+.og-paybar .seg.unsure, .og-sw.unsure { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.og-paybar .seg.unsure { color: var(--fg); }
 .og-paybar .seg.no, .og-sw.no { background: var(--muted); }
+.og-paybar .seg.none, .og-sw.none { background: var(--surface-2); box-shadow: inset 0 0 0 1.5px var(--muted); }
+.og-paybar .seg.none { color: var(--fg-2); }
 .og-list .og-quote { font-size: .88rem; }
 .og-qq { display: grid; grid-template-columns: auto 1fr; gap: .2rem .75rem; margin: 0; font-size: .9rem; }
 .og-qq dt { color: var(--muted); }
@@ -383,7 +387,7 @@
     });
     const missing = stats.n - q.answered;
     return el("div", { class: "og-freq", id: "og-freq" }, [
-      el("div", { class: "title" }, "How often members said they use it" + (missing ? ` (${q.answered} of ${stats.n} answered the quick questions)` : "")),
+      el("div", { class: "title" }, "How often members said they use it (their own answer)" + (missing ? ` (${q.answered} of ${stats.n} answered the quick questions)` : "")),
       bar,
       el("div", { class: "og-spreadlegend", "aria-hidden": "true" }, keys.map((k, i) => el("span", null, [el("i", { class: "og-sw", style: { background: `var(--og-l${i})` } }), `${FREQ_SHORT[k]} (${q.frequency[k] || 0})`]))),
     ]);
@@ -500,6 +504,7 @@
       "Each mark is one member. Left to right is how far AI use has gone in their work, from what they described; " +
       "up and down is how confident they said they are. The thin line under or over each mark runs from where that member's own rated tasks would predict their confidence (the short crossbar) to what they actually rated. " +
       "A mark well above its crossbar means they rate themselves more confident than what they described doing; well below it, less; a short or absent line means the two are in step. " +
+      "For members who have not used AI, low confidence is expected, so it is not marked. " +
       "Hover or tab to a mark to see who it is; click it to open their details." +
       (noMean ? ` ${plural(noMean, "member")} gave no ratings and ${noMean === 1 ? "is" : "are"} not shown here.` : ""));
     return sectionEl("scatter", "Practice and confidence", "Where what people do and how sure they feel line up, and where they do not.", el("div", null, [wrap, caption]));
@@ -541,7 +546,8 @@
       if (typeof E().divergenceFor === "function") { try { const d = E().divergenceFor(lv, p.confidence.items || []); if (d && Number.isFinite(d.expected)) expected = d.expected; } catch (_) { /* ignore */ } }
       if (expected !== null) {
         const ey = yv(expected);
-        ticks.appendChild(svg("line", { x1: cx, x2: cx, y1: ey, y2: cy, class: "tickline" }));
+        // Non-users are never marked "less confident" (Engine.divergenceFor), so no line below their crossbar.
+        if (!(lv === 0 && mean < expected)) ticks.appendChild(svg("line", { x1: cx, x2: cx, y1: ey, y2: cy, class: "tickline" }));
         ticks.appendChild(svg("line", { x1: cx - 5, x2: cx + 5, y1: ey, y2: ey, class: "tickend" }));
       }
       placed.push({ cx, cy, lv, kind, name: p.member.name, expected });
@@ -782,23 +788,23 @@
   function payTally(profiles, stats, nameOf) {
     const qs = stats.questionnaire;
     const opts = P().QUESTIONNAIRE.offer.options.filter((o) => o.key !== "nothing");
-    const box = el("div", { class: "og-list pay" }, [el("h3", null, "Would pay for"), el("div", { class: "sub" }, "What members ticked as worth their time in the quick questions, split by whether they would pay for it")]);
+    const box = el("div", { class: "og-list pay" }, [el("h3", null, "Would pay for"), el("div", { class: "sub" }, "Each member ticked any number of offers and answered once whether they would pay for what they ticked.")]);
     const wrap = el("div", { style: { position: "relative" } });
     const tip = makeTip(wrap);
     const max = Math.max(1, ...opts.map((o) => qs.offer[o.key] || 0));
     const tally = el("div", { class: "og-paytally" });
-    const PAY = [["yes", "would pay"], ["maybe", "maybe"], ["no", "no or not answered"]];
+    const PAY = [["yes", "Yes"], ["maybe", "Possibly"], ["unsure", "Don't know yet"], ["no", "No"], ["none", "Not answered"]];
     opts.forEach((o) => {
       const members = profiles.filter((p) => p.questionnaire && Array.isArray(p.questionnaire.offer) && p.questionnaire.offer.includes(o.key));
       const total = qs.offer[o.key] || 0;
-      const split = { yes: [], maybe: [], no: [] };
-      members.forEach((p) => { const v = payOf(p); (v === "yes" ? split.yes : v === "maybe" ? split.maybe : split.no).push(p); });
+      const split = { yes: [], maybe: [], unsure: [], no: [], none: [] };
+      members.forEach((p) => { const v = payOf(p); (split[v] && v !== "none" ? split[v] : split.none).push(p); });
       const bar = el("div", { class: "og-paybar", style: { width: (total / max * 100) + "%" } });
       PAY.forEach(([k, word]) => {
         const list = split[k]; if (!list.length) return;
         const names = list.map(nameOf).join(", ");
-        const lines = [`${list.length} ${word}`, o.label, names];
-        const seg = el("span", { class: "seg " + k, tabindex: "0", role: "img", "data-pay": k, "data-n": String(list.length), style: { flexGrow: String(list.length) }, title: `${list.length} ${word}: ${names}`, "aria-label": `${o.label}: ${list.length} ${word} (${names})` }, list.length / max >= 0.12 ? String(list.length) : "");
+        const lines = [`${list.length} would pay: ${word}`, o.label, names];
+        const seg = el("span", { class: "seg " + k, tabindex: "0", role: "img", "data-pay": k, "data-n": String(list.length), style: { flexGrow: String(list.length) }, title: `${word}: ${list.length} (${names})`, "aria-label": `${o.label}: ${list.length} answered ${word} (${names})` }, list.length / max >= 0.12 ? String(list.length) : "");
         seg.addEventListener("pointerenter", () => tip.showAt(seg, lines));
         seg.addEventListener("pointerleave", tip.hide);
         seg.addEventListener("focus", () => tip.showAt(seg, lines));
@@ -812,10 +818,10 @@
     });
     wrap.appendChild(tally);
     box.appendChild(wrap);
-    box.appendChild(el("div", { class: "og-ramp", "aria-hidden": "true", style: { marginTop: "0" } }, PAY.map(([k, word]) => el("span", null, [el("i", { class: "og-sw " + k }), word === "would pay" ? "Would pay" : word === "maybe" ? "Maybe" : "No or not answered"]))));
+    box.appendChild(el("div", { class: "og-ramp", "aria-hidden": "true", style: { marginTop: "0" } }, PAY.map(([k, word]) => el("span", null, [el("i", { class: "og-sw " + k }), word]))));
     const nothing = qs.offer.nothing || 0;
     const missing = stats.n - qs.answered;
-    box.appendChild(el("p", { class: "og-caption" }, `${plural(nothing, "member")} said nothing for now.` + (missing ? ` ${plural(missing, "member")} answered before the quick questions existed and ${missing === 1 ? "is" : "are"} not counted here.` : "") + " Hover or tab to a segment to see who."));
+    box.appendChild(el("p", { class: "og-caption" }, `${plural(nothing, "member")} ticked "${optLabel("offer", "nothing")}".` + (missing ? ` ${plural(missing, "member")} answered before the quick questions existed and ${missing === 1 ? "is" : "are"} not counted here.` : "") + " Hover or tab to a segment to see who."));
     const words = [];
     profiles.forEach((p) => {
       const ps = p.productSignals || {};

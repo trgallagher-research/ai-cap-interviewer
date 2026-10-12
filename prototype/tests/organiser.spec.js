@@ -57,7 +57,7 @@ const SEED = [
     summary: "Integrated AI into analysis of survey results and documents, but doubts herself.", domains: [{ key: "analysis", evidence: "I feed it anonymised survey comments and ask for patterns." }, { key: "learning", evidence: "I read up on new methods with it." }],
     tools: ["Copilot"], items: [{ id: "r1", task: "Find patterns in survey comments", level: 3, rating: 45 }, { id: "r2", task: "Translate a report", level: 1, rating: 35 }],
     wants: ["get more confident with client material"], offers: ["can show my survey-analysis routine"], pay: "a checklist for client confidentiality", quotes: ["I never put a client name in."],
-    q: { frequency: "weekly", uses: ["analysis", "learning"], tools: ["Microsoft Copilot"], stance: "cautious", offer: ["confidentiality"], pay: "maybe", canShow: "maybe" } }),
+    q: { frequency: "weekly", uses: ["analysis", "learning"], tools: ["Microsoft Copilot"], stance: "cautious", offer: ["confidentiality", "when-not"], pay: "unsure", canShow: "maybe" } }),
   profile({ id: "p_d", name: "Dirk", role: "trainer", level: 0, mean: 18, kind: "aligned", stance: "sceptical",
     summary: "Has not used AI tools in his work and doubts the value for relational work.", domains: [], tools: [],
     items: [{ id: "r1", task: "Open a free AI chat tool and ask it to summarise a one-page document", level: 1, rating: 25 }, { id: "r2", task: "Ask it for three icebreakers for a training", level: 1, rating: 11 }],
@@ -186,11 +186,14 @@ function check(name, ok, extra) { if (ok) { passes++; console.log("  ok   " + na
   check("wants/offers lists", (await page.$$("#og-signals .wants ul.full li")).length >= 3 && (await page.$$("#og-signals .offers ul.full li")).length >= 2);
   const qstats = await page.evaluate(() => Engine.stats(SEED).questionnaire);
   const tally = await page.$$eval("#og-signals .pay .og-payrow", (rows) => rows.map((r) => ({ key: r.dataset.offer, total: +r.dataset.total, segs: Object.fromEntries([...r.querySelectorAll(".seg")].map((x) => [x.dataset.pay, +x.dataset.n])) })));
-  check("pay tally: one bar per offer option except nothing", tally.length === 5 && !tally.some((r) => r.key === "nothing"));
+  check("pay tally: one bar per offer option except nothing", tally.length === (await page.evaluate(() => Prompts.QUESTIONNAIRE.offer.options.length - 1)) && !tally.some((r) => r.key === "nothing"));
+  check("pay tally: 'Don't know yet' segment for unsure", JSON.stringify(tally.find((r) => r.key === "when-not").segs) === JSON.stringify({ unsure: 1 }));
+  check("pay legend has five labels", JSON.stringify(await page.$$eval("#og-signals .pay .og-ramp span", (n) => n.map((x) => x.textContent))) === JSON.stringify(["Yes", "Possibly", "Don't know yet", "No", "Not answered"]));
+  check("pay subtitle explains one answer per member", (await page.textContent("#og-signals .pay .sub")).includes("answered once whether they would pay"));
   check("pay tally totals equal stats.questionnaire.offer", tally.every((r) => r.total === qstats.offer[r.key]), JSON.stringify({ tally, offer: qstats.offer }));
   check("pay tally segments sum to totals", tally.every((r) => Object.values(r.segs).reduce((a, b) => a + b, 0) === r.total));
   check("peer-halfday split yes 2 / maybe 1 / no 1", JSON.stringify(tally.find((r) => r.key === "peer-halfday").segs) === JSON.stringify({ yes: 2, maybe: 1, no: 1 }), JSON.stringify(tally.find((r) => r.key === "peer-halfday")));
-  check("pay caption says who said nothing", (await page.textContent("#og-signals .pay")).includes("1 member said nothing for now"));
+  check("pay caption says who said nothing", (await page.textContent("#og-signals .pay")).includes("1 member ticked \"Nothing on AI for now\""));
   check("pay: older profile noted as not counted", (await page.textContent("#og-signals .pay")).includes("answered before the quick questions"));
   check("pay: in their words shows quote and offerOther", (await page.textContent("#og-signals .pay .words")).includes("supervision group"));
   await page.hover("#og-signals .pay .og-payrow[data-offer='peer-halfday'] .seg.yes");
@@ -214,7 +217,10 @@ function check(name, ok, extra) { if (ok) { passes++; console.log("  ok   " + na
   check("frequency strip renders with a segment per non-zero answer", fsegs === Object.values(qstats.frequency).filter((v) => v > 0).length && (await page.textContent("#og-freq")).includes("How often members said they use it"));
   check("wants theme tally present", (await page.$$("#og-signals .wants ul.tally li")).length >= 2);
   check("scatter labels every mark with a name", (await page.$$("#og-scatter text.lbl")).length === withMean);
-  check("scatter draws a per-member expected tick per rated mark, no band", (await page.$$("#og-scatter .ticks .tickline")).length === withMean && (await page.$("#og-scatter .band")) === null);
+  const lvl0Below = await page.evaluate(() => SEED.filter((p) => p.practice.level === 0 && p.confidence.mean !== null && p.confidence.mean < Engine.divergenceFor(0, p.confidence.items).expected).length);
+  check("scatter: crossbar per rated mark, line except level-0 below expected (" + lvl0Below + ")", (await page.$$("#og-scatter .ticks .tickend")).length === withMean && (await page.$$("#og-scatter .ticks .tickline")).length === withMean - lvl0Below && lvl0Below >= 1 && (await page.$("#og-scatter .band")) === null);
+  check("scatter caption explains non-users", (await page.textContent("#og-scatter")).includes("For members who have not used AI, low confidence is expected, so it is not marked."));
+  check("frequency strip labelled as their own answer", (await page.textContent("#og-freq")).includes("(their own answer)"));
   check("heatmap notes members without evidence", (await page.textContent("#og-heat")).includes("has not used AI tools"));
   check("average confidence caption mentions rough comparison", (await page.textContent("#og-summary")).includes("rough comparison"));
   check("heatmap gap line above table", (await page.textContent("#og-heat")).indexOf("Columns marked \"gap\"") < (await page.textContent("#og-heat")).indexOf("Member"));
