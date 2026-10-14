@@ -103,6 +103,9 @@ Implementation notes (server, 2026-10-14; additive to the table above):
   `finished`, then call `/finish` again), 502 `bad_json`/`failed`, 503 `overloaded`/`unavailable`.
 - Input caps: name 80, role 160, answer 4000, "Other" text 200 characters. `answers` must use the
   QUESTIONNAIRE keys; answers to skipped questions are dropped (as `member.js` `sync()` does).
+- Per-IP limit uses the first `x-forwarded-for` entry. On Vercel the edge sets that entry, so it reflects the
+  real client. On any other host that does not overwrite the header (including plain `next start`, which the
+  tests rely on), a client can spoof it, so the per-IP limit is advisory there and `MAX_INTERVIEWS` is the hard cap.
 - Start order: validation (400) → per-IP rate limit (429; wrong access codes count too, which also stops
   guessing) → access code (403; compared case-insensitively) → `MAX_INTERVIEWS` (503).
 - Organiser: with no `ORGANISER_PASSCODE` under `next dev` the area is open (local work only); under

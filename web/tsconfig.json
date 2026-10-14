@@ -32,11 +32,11 @@
     "**/*.ts",
     "**/*.tsx",
     ".next/types/**/*.ts",
-    "next-env.d.ts",
-    ".next-e2e/types/**/*.ts"
+    "next-env.d.ts"
   ],
   "exclude": [
     "node_modules",
-    "public"
+    "public",
+    ".next-e2e"
   ]
 }

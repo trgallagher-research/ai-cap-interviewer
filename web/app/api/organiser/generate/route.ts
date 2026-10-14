@@ -11,7 +11,7 @@ import {
 } from "@/lib/store";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300; // profile and generation calls can exceed 60 s; allowed with Vercel Fluid compute (default for new projects)
 export const dynamic = "force-dynamic";
 
 function kindOf(v: unknown): GenerateKind | null {
