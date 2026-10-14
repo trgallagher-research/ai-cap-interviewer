@@ -159,13 +159,16 @@ async function fullFlow(browser, page, tag, name, opts = {}) {
   check("composer hidden while rating (" + tag + ")", await page.evaluate(() => document.getElementById("composer").hidden === true));
   const order = await page.$$eval("#rate-card .rate-item", (els) => els.map((e) => e.dataset.id));
   check("items ordered easiest first (" + tag + ")", order.join(",") === "r2,r1,r4,r3", order.join(","));
-  check("slider is 0-100 step 5 starting at 50 (" + tag + ")", await page.$eval("#range-r2", (el) => el.min === "0" && el.max === "100" && el.step === "5" && el.value === "50"));
+  check("slider is 0-100 step 5 (" + tag + ")", await page.$eval("#range-r2", (el) => el.min === "0" && el.max === "100" && el.step === "5"));
+  check("sliders start unset (" + tag + ")", (await page.textContent("#val-r2")) === "–" && (await page.locator("#rate-card .rate-slider.unset").count()) === 4);
+  check("send disabled until each task is rated or skipped (" + tag + ")", await page.$eval("#btn-rate-submit", (el) => el.disabled));
   await page.fill("#range-r2", "90");
   await page.fill("#range-r1", "75");
   await page.fill("#range-r4", "60");
   await page.check("#skip-r3");
   check("live value updates (" + tag + ")", (await page.textContent("#val-r2")) === "90", await page.textContent("#val-r2"));
   check("skipping disables that slider (" + tag + ")", await page.$eval("#range-r3", (el) => el.disabled));
+  check("send enabled once all rated or skipped (" + tag + ")", await page.$eval("#btn-rate-submit", (el) => !el.disabled));
   await shot("ratings");
   if (opts.max) await noOverflow(page, "ratings " + tag, opts.max);
   await page.click("#btn-rate-submit");
@@ -301,6 +304,7 @@ async function patchNextChips(page, chips) {
       const bubbles = await page.$$eval(".bubble.interviewer", (els) => els.map((e) => e.textContent));
       check("rate request text not duplicated by the retry", bubbles.filter((t) => t.includes("rate your confidence")).length === 1, JSON.stringify(bubbles.slice(-2)));
       check("no '<<' leaked during retry", (await page.evaluate(() => window.__leaks)).length === 0);
+      for (const box of await page.$$("#rate-card .skip input")) await box.check();
       await page.click("#btn-rate-submit");
       await waitIdle(page);
       await answer(page, "follow-up answer");

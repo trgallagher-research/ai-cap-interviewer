@@ -93,15 +93,15 @@
   const BEYOND = { 0: "done before", 1: "a step beyond", 2: "two steps beyond" };
   function payOf(p) { const ps = p.productSignals || {}; return ps.pay || (p.questionnaire && p.questionnaire.pay) || ""; }
   function optLabel(qid, key) { return (P().optionLabel ? P().optionLabel(qid, key) : key); }
-  const FREQ_SHORT = { never: "Never", tried: "Tried", monthly: "Monthly", weekly: "Weekly", daily: "Daily" };
+  const FREQ_SHORT = { never: "Never", tried: "Tried", monthly: "Monthly", weekly: "Weekly", daily: "Most days", multi: "Several a day", constant: "Constantly" };
 
   // ---------------------------------------------------------------------------
   // Styles (scoped under .og-root / .nw-root; tokens only, plus the validated ladder ramp)
   // ---------------------------------------------------------------------------
   const CSS = `
-:root { --og-l0:#7DBCBD; --og-l1:#56A4A6; --og-l2:#378A8D; --og-l3:#1C6A6D; --og-l4:#0E4A4D; --og-segtext:#FFFFFF; --og-segtext-light:#0B1F20; }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --og-l0:#2A5E5F; --og-l1:#3A7F81; --og-l2:#4FA3A5; --og-l3:#7CC8CA; --og-l4:#B4E4E5; --og-segtext:#0B1F20; --og-segtext-light:#EAF0EE; } }
-:root[data-theme="dark"] { --og-l0:#2A5E5F; --og-l1:#3A7F81; --og-l2:#4FA3A5; --og-l3:#7CC8CA; --og-l4:#B4E4E5; --og-segtext:#0B1F20; --og-segtext-light:#EAF0EE; }
+:root { --og-l0:#7DBCBD; --og-l1:#56A4A6; --og-l2:#378A8D; --og-l3:#1C6A6D; --og-l4:#0E4A4D; --og-l5:#07363A; --og-l6:#032325; --og-segtext:#FFFFFF; --og-segtext-light:#0B1F20; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --og-l0:#2A5E5F; --og-l1:#3A7F81; --og-l2:#4FA3A5; --og-l3:#7CC8CA; --og-l4:#B4E4E5; --og-l5:#D3F0F0; --og-l6:#EDFAFA; --og-segtext:#0B1F20; --og-segtext-light:#EAF0EE; } }
+:root[data-theme="dark"] { --og-l0:#2A5E5F; --og-l1:#3A7F81; --og-l2:#4FA3A5; --og-l3:#7CC8CA; --og-l4:#B4E4E5; --og-l5:#D3F0F0; --og-l6:#EDFAFA; --og-segtext:#0B1F20; --og-segtext-light:#EAF0EE; }
 
 .og-root { max-width: 72rem; margin: 0 auto; padding: 0 0 3rem; color: var(--fg); font-family: var(--font-body); }
 .og-root h1, .og-root h2, .og-root h3 { font-family: var(--font-display); font-weight: 500; margin: 0; }
@@ -381,11 +381,11 @@
     return wrap;
   }
 
-  /** Compact five-segment strip from the quick questions: how often members said they use AI. */
+  /** Compact seven-segment strip from the quick questions: how often members said they use AI. */
   function drawFrequencyStrip(stats) {
     const q = stats.questionnaire;
     if (!q || !q.answered) return null;
-    const keys = ["never", "tried", "monthly", "weekly", "daily"];
+    const keys = ["never", "tried", "monthly", "weekly", "daily", "multi", "constant"];
     const bar = el("div", { class: "og-freqbar", role: "img", "aria-label": "How often members said they use it: " + keys.map((k) => (q.frequency[k] || 0) + " " + FREQ_SHORT[k]).join(", ") });
     keys.forEach((k, i) => {
       const n = q.frequency[k] || 0; if (!n) return;

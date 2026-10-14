@@ -16,6 +16,7 @@ test("validateAnswers: normalises like member.js, rejects unknown keys and optio
   const n = validateAnswers({ frequency: "never", uses: ["writing"], stance: "sceptical", offer: ["nothing"], pay: "yes", canShow: "yes" });
   assert.deepEqual(n, { frequency: "never", stance: "sceptical", offer: ["nothing"] });
   // Multi questions default to empty arrays; pay skipped when offer empty.
+  for (const f of ["multi", "constant"]) assert.equal(validateAnswers({ frequency: f, stance: "enthusiast" })?.frequency, f);
   assert.deepEqual(validateAnswers({ frequency: "tried", stance: "cautious" }), { frequency: "tried", uses: [], tools: [], stance: "cautious", offer: [] });
   const bad = [
     {}, { frequency: "weekly" }, { frequency: "hourly", stance: "pragmatic" }, { frequency: "weekly", stance: "pragmatic", uses: ["cooking"] },

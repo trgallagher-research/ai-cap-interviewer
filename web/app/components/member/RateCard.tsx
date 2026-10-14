@@ -9,7 +9,8 @@ interface Props {
   onSubmit: (ratings: Record<string, number>) => void;
 }
 
-/** Confidence sliders 0–100 step 5, easiest task first, with a per-item skip (port of showRateCard). */
+/** Confidence sliders 0–100 step 5, easiest task first, with a per-item skip (port of showRateCard).
+ *  Sliders start unset (no anchor value); every item must be rated or skipped before sending. */
 export function RateCard({ items, disabled, onSubmit }: Props) {
   // Easiest first, stable.
   const sorted = useMemo(
@@ -20,14 +21,17 @@ export function RateCard({ items, disabled, onSubmit }: Props) {
         .map((x) => x.it),
     [items],
   );
-  const [values, setValues] = useState<Record<string, number>>(() => Object.fromEntries(items.map((it) => [it.id, 50])));
+  const [values, setValues] = useState<Record<string, number>>({});
   const [skips, setSkips] = useState<Record<string, boolean>>({});
   const [sent, setSent] = useState(false);
 
+  const remaining = sorted.filter((it) => !skips[it.id] && typeof values[it.id] !== "number").length;
+  const set = (id: string, raw: string) => setValues((p) => ({ ...p, [id]: Number(raw) }));
+
   function submit() {
-    if (sent || disabled) return;
+    if (sent || disabled || remaining) return;
     const ratings: Record<string, number> = {};
-    for (const it of sorted) if (!skips[it.id]) ratings[it.id] = values[it.id] ?? 50;
+    for (const it of sorted) if (!skips[it.id] && typeof values[it.id] === "number") ratings[it.id] = values[it.id];
     setSent(true);
     onSubmit(ratings);
   }
@@ -36,31 +40,35 @@ export function RateCard({ items, disabled, onSubmit }: Props) {
     <div className="card rate-card stack-sm" id="rate-card">
       <p className="eyebrow">Rate your confidence</p>
       <p className="small">
-        For each task, how confident are you that you can do it right now? 0 = cannot do at all, 100 = highly certain you can do it. There are no
-        right answers.
+        For each task, how confident are you that you can do it right now? Tap or drag on the scale: 0 = cannot do at all, 100 = highly certain you
+        can do it. There are no right answers.
       </p>
       <div>
         {sorted.map((it) => {
-          const v = values[it.id] ?? 50;
+          const v = values[it.id];
+          const unset = typeof v !== "number";
           const sk = !!skips[it.id];
           return (
             <div key={it.id} className={"rate-item" + (sk ? " skipped" : "")} data-id={it.id}>
               <p className="rate-task">{it.task}</p>
-              <div className="rate-slider">
+              <div className={"rate-slider" + (unset ? " unset" : "")}>
                 <input
                   type="range"
                   min={0}
                   max={100}
                   step={5}
-                  value={v}
+                  value={unset ? 50 : v}
                   id={"range-" + it.id}
                   disabled={sk}
                   aria-label={"Confidence for: " + it.task}
-                  aria-valuetext={String(v)}
-                  onChange={(e) => setValues((p) => ({ ...p, [it.id]: Number(e.target.value) }))}
+                  aria-valuetext={unset ? "not rated yet" : String(v)}
+                  onChange={(e) => set(it.id, e.target.value)}
+                  // A tap on the hidden midpoint fires no change event, so record it on release too.
+                  onPointerUp={(e) => set(it.id, e.currentTarget.value)}
+                  onKeyUp={(e) => set(it.id, e.currentTarget.value)}
                 />
                 <span className="rate-value" id={"val-" + it.id}>
-                  {v}
+                  {unset ? "–" : v}
                 </span>
               </div>
               <div className="rate-anchors" aria-hidden="true">
@@ -82,9 +90,14 @@ export function RateCard({ items, disabled, onSubmit }: Props) {
         })}
       </div>
       <div className="row">
-        <button className="btn primary" type="button" id="btn-rate-submit" disabled={sent || disabled} onClick={submit}>
+        <button className="btn primary" type="button" id="btn-rate-submit" disabled={sent || disabled || remaining > 0} onClick={submit}>
           Send my ratings
         </button>
+        {remaining > 0 && (
+          <span className="small muted" id="rate-remaining">
+            Rate or skip {remaining === 1 ? "1 more task" : remaining + " more tasks"}
+          </span>
+        )}
       </div>
     </div>
   );

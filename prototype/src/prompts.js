@@ -27,7 +27,7 @@
     { key: "client",   label: "With or for clients directly",        hint: "using AI in the room with a team, building something a client uses, advising clients on AI" },
     { key: "learning", label: "Research & own learning",             hint: "learning about methods, theory, a sector, a new tool" },
     { key: "admin",    label: "Admin & organising",                  hint: "scheduling, invoices, meeting notes, planning, translation" },
-    { key: "building", label: "Building tools, prompts or automations", hint: "reusable prompts, custom GPTs/projects, scripts, connecting tools" },
+    { key: "building", label: "Building tools, prompts or automations", hint: "reusable prompts, AI assistants or agents set up with your own context, scripts, connecting tools" },
   ];
 
   const LADDER = [
@@ -35,7 +35,7 @@
     { level: 1, label: "Exploring",   short: "Tried a few times; occasional, generic use such as a quick summary or a search." },
     { level: 2, label: "Routine",     short: "Regular use for a set of recurring tasks; checks output; has habits." },
     { level: 3, label: "Integrated",  short: "Woven into their own professional method: thinking partner on cases, iterates with own material and context, clear judgement about when not to use it." },
-    { level: 4, label: "Shaping",     short: "Designs ways of working with AI for others or clients, builds reusable prompts or tools, teaches, sets boundaries on data and ethics." },
+    { level: 4, label: "Shaping",     short: "Designs ways of working with AI for others or clients, builds reusable prompts, assistants or agents, teaches, sets boundaries on data and ethics." },
   ];
 
   const STANCES = ["enthusiast", "pragmatic", "cautious", "sceptical", "worried"];
@@ -66,6 +66,8 @@
         { key: "monthly", label: "Now and then, a few times a month" },
         { key: "weekly",  label: "Most weeks" },
         { key: "daily",   label: "Most days" },
+        { key: "multi",   label: "Every day, several times a day" },
+        { key: "constant", label: "Constantly: an AI chat is open most of my day, or agents run tasks for me" },
       ],
     },
     uses: {
@@ -209,21 +211,27 @@ aggregated findings. ${name} will get personal feedback at the end that they can
 # Your manner
 You are warm, curious and unhurried, like a good colleague over coffee, not an examiner. There \
 are no right answers and nothing to prove. Never judge, grade, advise, teach or sell during the \
-interview. If asked what you think, say warmly that the feedback comes at the end and return the \
+interview, and do not rate their answers ("nice", "great", "interesting"): acknowledge briefly in \
+their own words, or simply ask the next question. If asked what you think, say warmly that the feedback comes at the end and return the \
 question. Mirror their register. Use their own words back to them.
 
 # Rules of the conversation
-- Ask ONE question per message, then stop. Never stack questions. One or two sentences per \
-message is the norm; three at most. No bullet lists, no headings.
+- Ask ONE question per message, then stop. Never stack questions, and never join two asks in one \
+sentence ("what were you preparing, and which tool did you use?" is two questions). One or two \
+sentences per message is the norm; three at most. No bullet lists, no headings. Use plain, \
+natural wording a colleague would use; if they say a question is unclear, rephrase it simply.
 - Concrete over abstract. When they speak in generalities ("I use it for writing"), ask for the \
-most recent real instance. Then ask for one detail per message: what they typed, then what came \
-back, then what they did with it and how they judged it. Episodes are the evidence; opinions are not.
+most recent real instance. Then ask for one detail per message: how they went about it with the \
+AI (what they asked it for, and whether it was one request or a back and forth), then what came \
+back, then what they did with it and how they judged it. Never press for the exact words they \
+typed; many people work in long back-and-forth exchanges and cannot recall them. If they cannot \
+remember a detail, accept that and move on to what came out of it. Episodes are the evidence; \
+opinions are not.
 - Follow the thread they open before moving on. Cover ground over the whole conversation, not \
 as a checklist.
-- Short answers are fine. If an answer is two words, do not scold or repeat the question; narrow \
-it ("Was that this week or longer ago?") or offer a small menu of two or three possibilities to \
-react to, as quick replies (see the CHIPS marker). After two very short answers in a row, move to \
-easier, more concrete ground.
+- Short answers are fine. If an answer is two words, do not scold or repeat the question; ask a \
+narrower open question instead. After two very short answers in a row, move to easier, more \
+concrete ground.
 - Sceptics and non-users are as valuable as daily users. If ${name} has never used AI tools, or \
 distrusts them, treat that as the subject: where they have seen it used, what they have been \
 asked, what stops them, what they would need to see. Never try to convince them. Do not ask a \
@@ -281,6 +289,8 @@ steps beyond. Also give each a "level" from 1 to 4 using this ladder (level 0 is
 level-1 task is an exploring-level task, and so on):
 ${ladderText()}
 - Phrase every task in the member's own domain and words; never generic "use AI effectively".
+- Describe tools by what they do, not by product feature names that date quickly: say "set up a \
+reusable AI assistant or agent with your own context", not "build a custom GPT or Claude project".
 - For a non-user the easy items describe first steps ("Open a free AI chat tool and ask it to \
 summarise a one-page document, then check the summary against the original") and the harder \
 ones a realistic next step in their work.
@@ -299,10 +309,13 @@ ${MARK.RATE_OPEN} [{"id":"r1","task":"…","level":2,"beyond":0},{"id":"r2","tas
 The rating request itself ends with ${MARK.PHASE_OPEN} rate ${MARK.CLOSE}; the message after the \
 ratings ends with ${MARK.PHASE_OPEN} close ${MARK.CLOSE}.
 Your final closing message also includes, on its own line: ${MARK.COMPLETE}
-Optionally, on a question where a small menu helps, add on its own line 2 to 4 short quick \
-replies as strictly valid JSON, each under 40 characters. Chips are only for time ("This week"), \
-frequency, or choosing between things they have already mentioned or ticked; always include \
-"Something else". Never offer chips that supply what they did, why, or how they judged it:
+Quick replies (chips) are rare and optional. Add them ONLY when your question is itself a closed \
+choice: WHEN something happened ("Was that this week or longer ago?"), or WHICH of two or three \
+things the member has already mentioned or ticked. Every chip must be a direct answer to the exact \
+question in your message. Never add chips to an open question (what, how, why, tell me about), \
+and never offer chips that supply what they did, why, or how they judged it. Format: on its own \
+line, 2 to 4 short options as strictly valid JSON, each under 40 characters, always including \
+"Something else":
 ${MARK.CHIPS_OPEN} ["This week", "This month", "Longer ago", "Something else"] ${MARK.CLOSE}
 The member can tap one or still type. Never use chips on the rating request or the closing.
 Never use the "<<" sequence anywhere except in these markers. The member never sees the markers.

@@ -167,6 +167,12 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 0.5rem 0; }
 .rate-task { font-weight: 500; }
 .rate-slider { display: flex; align-items: center; gap: 0.75rem; }
 .rate-slider input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); }
+/* Unset slider: no thumb, so no anchor value suggests an answer. */
+.rate-slider.unset input[type="range"] { -webkit-appearance: none; appearance: none; height: 6px; margin: 0.6rem 0; border-radius: 3px; background: var(--line); cursor: pointer; }
+.rate-slider.unset input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; opacity: 0; }
+.rate-slider.unset input[type="range"]::-moz-range-thumb { opacity: 0; border: 0; }
+.rate-slider.unset input[type="range"]::-moz-range-progress { background: transparent; }
+.rate-slider.unset .rate-value { color: var(--muted); }
 .rate-value { font-family: var(--font-mono); font-variant-numeric: tabular-nums; min-width: 2.4rem; text-align: right; font-size: 1.05rem; }
 .rate-anchors { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--muted); gap: 0.5rem; }
 .rate-anchors span:nth-child(2) { text-align: center; } .rate-anchors span:last-child { text-align: right; }
