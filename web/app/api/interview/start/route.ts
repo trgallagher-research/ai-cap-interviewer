@@ -17,6 +17,11 @@ export async function POST(req: NextRequest) {
     const answers = validateAnswers(body.answers);
 
     const required = process.env.MEMBER_ACCESS_CODE || "";
+    // On a production deployment, starts need an access code unless the site is deliberately open:
+    // without one, anyone with the URL could fill every interview slot and spend the budget.
+    if (!required && process.env.VERCEL_ENV === "production" && process.env.ALLOW_OPEN_START !== "1") {
+      return jsonError(503, "The interview is not open yet. Please use the link from your invitation.", "not_configured");
+    }
     if (required) {
       const got = typeof body.accessCode === "string" ? body.accessCode.trim().slice(0, LIMITS_INPUT.accessCode) : "";
       if (!got || !safeEqual(got.toLowerCase(), required.trim().toLowerCase())) {

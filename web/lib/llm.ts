@@ -52,10 +52,11 @@ export function toLlmError(err: unknown): LlmError {
   if (err instanceof Anthropic.APIError) {
     return new LlmError("Claude could not answer (" + (err.status ?? "error") + "). Please try again.", "failed", 502);
   }
-  const msg = err instanceof Error ? err.message : String(err);
   const code = (err as { code?: string } | null)?.code;
-  if (code === "bad_json") return new LlmError(msg, "bad_json", 502);
-  return new LlmError(msg || "Claude could not answer. Please try again.", "failed", 502);
+  // Anything else (storage, programming errors) is logged; members get a generic message.
+  console.error(err);
+  if (code === "bad_json") return new LlmError("Claude's answer could not be read. Please try again.", "bad_json", 502);
+  return new LlmError("Something went wrong while preparing the answer. Please try again.", "failed", 502);
 }
 
 // ---------------------------------------------------------------------------
@@ -242,6 +243,8 @@ const mockLlm: Llm = {
 };
 
 export function isMockLlm(): boolean {
+  // Never on a production deployment, whatever the env says.
+  if (process.env.VERCEL_ENV === "production") return false;
   return process.env.AIWD_MOCK_LLM === "1";
 }
 

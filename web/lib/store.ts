@@ -113,10 +113,18 @@ class MemoryKV implements KV {
   async mget(keys: string[]) { return keys.map((k) => { const e = this.live(k); return e ? e.v : null; }); }
 }
 
+/** Thrown when the deployment has no shared store: every cap and lock would silently stop working. */
+export class StorageNotConfigured extends Error {}
+
 let kvInstance: KV | null = null;
 function kv(): KV {
   if (!kvInstance) {
     const env = redisEnv();
+    // On Vercel, memory is per instance: caps, rate limits and locks would not hold and data would be
+    // lost. Refuse to run instead (set ALLOW_MEMORY_STORE=1 only for a throwaway preview).
+    if (!env && process.env.VERCEL === "1" && process.env.ALLOW_MEMORY_STORE !== "1") {
+      throw new StorageNotConfigured("No storage configured: add the Upstash for Redis integration to this Vercel project.");
+    }
     kvInstance = env ? new RedisKV(env.url, env.token) : new MemoryKV();
   }
   return kvInstance;
@@ -162,9 +170,9 @@ export async function saveInterview(rec: InterviewRecord): Promise<void> {
 }
 
 /** Per-interview lock. Returns a token to release with, or null when busy. */
-export async function acquireLock(id: string): Promise<string | null> {
+export async function acquireLock(id: string, ms: number = LOCK_MS): Promise<string | null> {
   const token = randomId("lk_");
-  const ok = await kv().set(P + "lock:" + id, token, { nx: true, px: LOCK_MS });
+  const ok = await kv().set(P + "lock:" + id, token, { nx: true, px: ms });
   return ok ? token : null;
 }
 
@@ -190,6 +198,26 @@ export async function reserveInterviewSlot(): Promise<boolean> {
 
 export async function releaseInterviewSlot(): Promise<void> {
   await kv().decr(P + "count:interviews");
+}
+
+/**
+ * Count one use of something in a fixed window; true while the count is within `max`.
+ * Used for finish attempts, transcription calls and organiser login failures.
+ */
+export async function withinLimit(name: string, max: number, windowSeconds: number): Promise<boolean> {
+  const key = P + "rl:" + name;
+  const n = await kv().incr(key);
+  if (n === 1) await kv().expire(key, windowSeconds);
+  return n <= max;
+}
+
+/** Read a counter without incrementing it (0 when absent). */
+export async function counterValue(name: string): Promise<number> {
+  return Number(await kv().get(P + "rl:" + name)) || 0;
+}
+
+export async function resetCounter(name: string): Promise<void> {
+  await kv().del(P + "rl:" + name);
 }
 
 export const START_LIMIT_PER_HOUR = 5;
@@ -245,7 +273,7 @@ export async function setGenerated(kind: GenerateKind, value: GeneratedResult): 
 
 /** Short lock for an expensive organiser generation (one at a time per kind). */
 export async function acquireGenerateLock(kind: GenerateKind): Promise<string | null> {
-  return acquireLock("gen-" + kind);
+  return acquireLock("gen-" + kind, 300_000); // generation calls can run up to 240 s
 }
 export async function releaseGenerateLock(kind: GenerateKind, token: string): Promise<void> {
   return releaseLock("gen-" + kind, token);

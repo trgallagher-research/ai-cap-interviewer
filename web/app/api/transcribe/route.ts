@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { transcribe, transcriptionEnabled } from "@/lib/groq";
-import { isInterviewId } from "@/lib/http";
-import { getInterview } from "@/lib/store";
+import { clientIp, isInterviewId } from "@/lib/http";
+import { getInterview, withinLimit } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -37,6 +37,11 @@ export async function POST(req: NextRequest) {
   const rec = isInterviewId(interviewId) ? await getInterview(interviewId) : null;
   if (!rec || rec.state.status !== "in_progress") {
     return NextResponse.json({ error: "Interview not active", code: "not_active" }, { status: 403 });
+  }
+
+  // Caps so one interview id cannot become a paid transcription loop.
+  if (!(await withinLimit("tx:iv:" + interviewId, 30, 60 * 24 * 60 * 60)) || !(await withinLimit("tx:ip:" + clientIp(req), 60, 60 * 60))) {
+    return NextResponse.json({ error: "Voice limit reached for this interview. Please type your answer.", code: "limit" }, { status: 429 });
   }
 
   const filename = file instanceof File && file.name ? file.name : `audio.${file.type.includes("mp4") ? "mp4" : "webm"}`;

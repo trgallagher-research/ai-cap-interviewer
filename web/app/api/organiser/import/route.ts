@@ -4,6 +4,7 @@ import { requireOrganiser } from "@/lib/auth";
 import { errorResponse, jsonError, noStore, readJson } from "@/lib/http";
 import { saveProfile } from "@/lib/store";
 import type { Profile } from "@/lib/aiwd/types";
+import { sanitiseImported } from "@/lib/validate";
 
 export const runtime = "nodejs";
 
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
     const now = new Date().toISOString();
     for (const c of candidates) {
       if (!isProfileLike(c) || c.id.length > 200) { skipped++; continue; }
-      const p: Profile = Object.assign({}, c, { source: "imported", importedAt: now });
+      const p: Profile = Object.assign(sanitiseImported(c), { source: "imported", importedAt: now }) as unknown as Profile;
       if (typeof p.createdAt !== "string" || !Number.isFinite(Date.parse(p.createdAt))) p.createdAt = now;
       await saveProfile(p);
       imported++;

@@ -2,6 +2,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { ValidationError } from "./validate";
 import { LlmError } from "./llm";
+import { StorageNotConfigured } from "./store";
 
 export function jsonError(status: number, error: string, code?: string): NextResponse {
   return NextResponse.json(code ? { error, code } : { error }, { status, headers: { "cache-control": "no-store" } });
@@ -33,6 +34,7 @@ export function clientIp(req: NextRequest): string {
 export function errorResponse(err: unknown): NextResponse {
   if (err instanceof ValidationError) return jsonError(400, err.message, "invalid");
   if (err instanceof LlmError) return jsonError(err.status, err.message, err.code);
+  if (err instanceof StorageNotConfigured) { console.error(err.message); return jsonError(503, "The site is not fully set up yet. Please tell the organiser.", "not_configured"); }
   console.error(err);
   return jsonError(500, "Something went wrong on the server. Please try again.", "server");
 }

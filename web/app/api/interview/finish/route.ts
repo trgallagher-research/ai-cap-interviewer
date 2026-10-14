@@ -3,7 +3,7 @@ import { assembleProfile, chatJson, Interview, profileMessages } from "@/lib/aiw
 import { errorResponse, isInterviewId, jsonError, noStore, readJson } from "@/lib/http";
 import { getLlm } from "@/lib/llm";
 import { memberResult } from "@/lib/member";
-import { acquireLock, getInterview, releaseLock, saveInterview, saveProfile } from "@/lib/store";
+import { acquireLock, getInterview, releaseLock, saveInterview, saveProfile, withinLimit } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // profile and generation calls can exceed 60 s; allowed with Vercel Fluid compute (default for new projects)
@@ -24,7 +24,11 @@ export async function POST(req: NextRequest) {
     if (rec.state.status !== "complete" && rec.state.status !== "ended_early") {
       return jsonError(409, "The interview is not finished yet.", "not_finished");
     }
-    const token = await acquireLock(id);
+    // Cap model attempts per interview: a profile that keeps failing must not become a paid loop.
+    if (!(await withinLimit("finish:" + id, 3, 60 * 24 * 60 * 60))) {
+      return jsonError(429, "We could not prepare your feedback this time. Your answers are saved for the organiser.", "limit");
+    }
+    const token = await acquireLock(id, 300_000);
     if (!token) return jsonError(409, "Your feedback is already being prepared.", "busy");
     try {
       rec = await getInterview(id);
