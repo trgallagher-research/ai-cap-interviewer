@@ -20,6 +20,8 @@ export interface Answers {
   offerOther?: string;
   pay?: string;
   canShow?: string;
+  /** Statement blocks (views, skills, scenarios, support) and the open reservation. */
+  [qid: string]: string | string[] | undefined;
 }
 
 export interface Member {
@@ -84,13 +86,32 @@ export interface QuestionOption {
 
 export interface Question {
   id: string;
-  type: "single" | "multi";
+  type: "single" | "multi" | "text";
   required?: boolean;
   other?: boolean;
   skipIf?: Record<string, string[]>;
   skipIfEmpty?: string[];
   label: string;
   options: QuestionOption[];
+  /** Statement items: which page block they belong to, and a subheading shown before them. */
+  block?: "views" | "skills" | "scenario" | "support";
+  sub?: string;
+  /** Views: conviction or doubt statement. */
+  group?: "conviction" | "doubt" | "access" | "use";
+  /** Skills: ladder level of the behaviour (1 basic … 4 advanced). */
+  level?: number;
+  /** Scenarios: the option key of the careful answer. */
+  correct?: string;
+  /** Text questions: maximum length. */
+  max?: number;
+}
+
+/** One page of the opening questionnaire. */
+export interface QuestionPage {
+  id: string;
+  title: string;
+  intro: string;
+  qids: string[];
 }
 
 export interface Domain {
@@ -123,6 +144,8 @@ export interface Divergence {
 export interface NextStep {
   title: string;
   detail: string;
+  /** Two or three concrete actions. */
+  steps?: string[];
 }
 
 export interface Feedback {
@@ -130,7 +153,31 @@ export interface Feedback {
   summary: string;
   strengths: string[];
   nextSteps: NextStep[];
+  /** Gentle note when confidence and concrete skills or practice diverge; empty otherwise. */
+  calibration?: string;
+  /** Follow-up route matched to willingness to pay and access to support. */
+  followUp?: string;
   closing: string;
+}
+
+export type CalibrationKind = "confidence-above-skills" | "skills-above-confidence" | "in-line" | "unknown";
+
+/** Computed in code from the questionnaire blocks (and the confidence mean). */
+export interface SelfCheck {
+  /** 0–100 from the concrete skill items; null if none answered. */
+  skillIndex: number | null;
+  skillsAnswered: number;
+  scenarios: { answered: number; careful: number };
+  /** Mean agreement with the conviction statements on a 1–5 scale; null if none answered. */
+  conviction: number | null;
+  /** Doubt statements they agreed with (question ids). */
+  doubts: string[];
+  /** Support they have (ids answered yes) and support they used. */
+  access: string[];
+  used: string[];
+  whyNot: string[];
+  reservation: string;
+  calibration: { kind: CalibrationKind; gap: number | null };
 }
 
 export interface SelfReport {
@@ -176,6 +223,7 @@ export interface Profile {
   productSignals: ProductSignals;
   questionnaire?: Answers | null;
   selfReport?: SelfReport | null;
+  selfCheck?: SelfCheck | null;
   feedback: Feedback;
   quotes: string[];
   transcript?: Turn[];
@@ -197,6 +245,14 @@ export interface QuestionnaireStats {
   claimedNoEpisode: Record<string, number>;
   probedNoEpisode: Record<string, number>;
   answered: number;
+  /** Ticked "instead of a search engine". */
+  search: number;
+  /** Per statement: how many answered, and how many agreed / said yes or often+always / chose the careful answer. */
+  items: Record<string, { answered: number; positive: number }>;
+  whyNot: Record<string, number>;
+  /** Have someone to ask (in or outside work) but have not asked in six months. */
+  accessNotAsked: number;
+  calibration: Record<string, number>;
 }
 
 export interface Stats {

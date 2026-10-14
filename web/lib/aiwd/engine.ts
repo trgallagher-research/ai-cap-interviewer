@@ -414,11 +414,14 @@ export function assembleProfile(interview: Pick<Interview, "member" | "turns" | 
       tools: (a.frequency === "never" || !Array.isArray(a.tools)) ? [] : a.tools.slice().concat(a.toolsOther ? [a.toolsOther] : []),
       canShow: a.canShow || "",
     } : null,
+    selfCheck: P.computeSelfCheck(a, mean),
     feedback: {
       headline: String(fb.headline || ("Thanks " + (interview.member.name || "") + ", here is what stood out")),
       summary: String(fb.summary || ""),
       strengths: Array.isArray(fb.strengths) ? fb.strengths.map(String).slice(0, 2) : [],
-      nextSteps: Array.isArray(fb.nextSteps) ? fb.nextSteps.filter((s: any) => s && s.title).map((s: any) => ({ title: String(s.title), detail: String(s.detail || "") })).slice(0, 2) : [],
+      nextSteps: Array.isArray(fb.nextSteps) ? fb.nextSteps.filter((s: any) => s && s.title).map((s: any) => ({ title: String(s.title), detail: String(s.detail || ""), steps: Array.isArray(s.steps) ? s.steps.map(String).filter(Boolean).slice(0, 3) : [] })).slice(0, 3) : [],
+      calibration: String(fb.calibration || ""),
+      followUp: String(fb.followUp || ""),
       closing: String(fb.closing || ""),
     },
     quotes: Array.isArray(m.quotes) ? m.quotes.map(String).slice(0, 4) : [],
@@ -447,7 +450,11 @@ export function stats(profiles: Profile[]): Stats {
     (p.offers || []).forEach((o) => offers.push(o));
     if (p.productSignals && p.productSignals.wouldPayFor) pay.push(p.productSignals.wouldPayFor);
   }
-  const q = { frequency: {} as Record<string, number>, offer: {} as Record<string, number>, pay: { yes: 0, maybe: 0, no: 0, unsure: 0 } as Record<string, number>, selfDomains: {} as Record<string, number>, claimedNoEpisode: {} as Record<string, number>, probedNoEpisode: {} as Record<string, number>, answered: 0 };
+  const q = { frequency: {} as Record<string, number>, offer: {} as Record<string, number>, pay: { yes: 0, maybe: 0, no: 0, unsure: 0 } as Record<string, number>, selfDomains: {} as Record<string, number>, claimedNoEpisode: {} as Record<string, number>, probedNoEpisode: {} as Record<string, number>, answered: 0,
+    search: 0, items: {} as Record<string, { answered: number; positive: number }>, whyNot: {} as Record<string, number>, accessNotAsked: 0,
+    calibration: { "confidence-above-skills": 0, "skills-above-confidence": 0, "in-line": 0, "unknown": 0 } as Record<string, number> };
+  for (const qid of P.QUESTION_ORDER) if (P.QUESTIONNAIRE[qid].block) q.items[qid] = { answered: 0, positive: 0 };
+  (P.QUESTIONNAIRE.whyNot.options).forEach((o) => { q.whyNot[o.key] = 0; });
   (P.QUESTIONNAIRE.frequency.options).forEach((o) => { q.frequency[o.key] = 0; });
   (P.QUESTIONNAIRE.offer.options).forEach((o) => { q.offer[o.key] = 0; });
   P.DOMAINS.forEach((d) => { q.selfDomains[d.key] = 0; q.claimedNoEpisode[d.key] = 0; q.probedNoEpisode[d.key] = 0; });
@@ -466,6 +473,18 @@ export function stats(profiles: Profile[]): Stats {
     }
     const qa = p.questionnaire || {};
     for (const k of (Array.isArray(qa.offer) ? qa.offer : [])) if (q.offer[k] !== undefined) q.offer[k]++;
+    if (Array.isArray(qa.uses) && qa.uses.includes("search") && !P.questionSkipped("uses", qa)) q.search++;
+    for (const [qid, cell] of Object.entries(q.items)) {
+      const v = (qa as Record<string, unknown>)[qid];
+      if (typeof v !== "string" || !v || P.questionSkipped(qid, qa)) continue;
+      const qq = P.QUESTIONNAIRE[qid];
+      cell.answered++;
+      if (qq.block === "scenario" ? v === qq.correct : (P.POSITIVE[qq.block as string] || []).includes(v)) cell.positive++;
+    }
+    if (Array.isArray(qa.whyNot) && !P.questionSkipped("whyNot", qa)) for (const k of qa.whyNot) if (q.whyNot[k] !== undefined) q.whyNot[k]++;
+    if ((qa.supInOrg === "yes" || qa.supOutside === "yes") && qa.supAsked === "no") q.accessNotAsked++;
+    const ck = p.selfCheck && p.selfCheck.calibration ? p.selfCheck.calibration.kind : null;
+    if (ck && q.calibration[ck] !== undefined) q.calibration[ck]++;
     if (ps.pay && q.pay[ps.pay] !== undefined) q.pay[ps.pay]++;
   }
   const meanConfidence = means.length ? Math.round(means.reduce((a, b) => a + b, 0) / means.length) : null;

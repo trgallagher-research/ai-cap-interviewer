@@ -35,7 +35,9 @@ export interface Feedback {
   headline: string;
   summary: string;
   strengths: string[];
-  nextSteps: { title: string; detail: string }[];
+  nextSteps: { title: string; detail: string; steps?: string[] }[];
+  calibration?: string;
+  followUp?: string;
   closing: string;
 }
 

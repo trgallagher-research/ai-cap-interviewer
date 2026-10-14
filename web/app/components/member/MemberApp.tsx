@@ -552,7 +552,7 @@ export function MemberApp() {
           <h1>How does AI show up in your work?</h1>
         </div>
         <p className="lead">
-          This takes about 8 to 10 minutes: a minute of quick questions, then a short conversation in English with an AI interviewer. It is about how
+          This takes about 15 minutes: a few short pages of questions, then a short conversation in English with an AI interviewer. It is about how
           AI tools do or do not show up in your work: what you actually do, what you have learned, and where your edges are. There are no right
           answers. People who never use AI are as interesting to us as daily users.
         </p>
@@ -855,10 +855,29 @@ export function MemberApp() {
                   <div className="stack-sm" style={{ gap: "0.15rem" }}>
                     <h3>{s.title}</h3>
                     <p className="small">{s.detail}</p>
+                    {s.steps && s.steps.length > 0 && (
+                      <ul className="small step-list">
+                        {s.steps.map((t, j) => (
+                          <li key={j}>{t}</li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
+          </section>
+        )}
+        {fb.calibration && (
+          <section className="stack-sm" id="fb-calibration">
+            <h2>Confidence and practice</h2>
+            <p>{fb.calibration}</p>
+          </section>
+        )}
+        {fb.followUp && (
+          <section className="stack-sm" id="fb-followup">
+            <h2>If you want to go further</h2>
+            <p>{fb.followUp}</p>
           </section>
         )}
         {fb.closing && <p className="lead">{fb.closing}</p>}

@@ -16,6 +16,16 @@ test("validateAnswers: normalises like member.js, rejects unknown keys and optio
   const n = validateAnswers({ frequency: "never", uses: ["writing"], stance: "sceptical", offer: ["nothing"], pay: "yes", canShow: "yes" });
   assert.deepEqual(n, { frequency: "never", stance: "sceptical", offer: ["nothing"] });
   // Multi questions default to empty arrays; pay skipped when offer empty.
+  // Statement blocks: scale answers kept, text trimmed and capped, skip rules applied, unknown options rejected.
+  const blk = validateAnswers({ frequency: "never", stance: "sceptical", viewEssential: "sd", reservation: "  Too much hype  ", skillCheck: "always", scenarioCheck: "unsure", supAsked: "yes", whyNot: ["noTime"], offer: [] });
+  assert.equal(blk.viewEssential, "sd");
+  assert.equal(blk.reservation, "Too much hype");
+  assert.equal(blk.skillCheck, undefined);       // skills skipped for never-users
+  assert.equal(blk.scenarioCheck, "unsure");     // scenarios are for everyone
+  assert.equal(blk.whyNot, undefined);           // only asked when they have not asked for help
+  assert.deepEqual(validateAnswers({ frequency: "weekly", stance: "pragmatic", supAsked: "no", whyNot: ["noTime"] }).whyNot, ["noTime"]);
+  assert.throws(() => validateAnswers({ frequency: "weekly", stance: "pragmatic", viewEssential: "maybe" }));
+  assert.throws(() => validateAnswers({ frequency: "weekly", stance: "pragmatic", reservation: "x".repeat(301) }));
   for (const f of ["multi", "constant"]) assert.equal(validateAnswers({ frequency: f, stance: "enthusiast" })?.frequency, f);
   assert.deepEqual(validateAnswers({ frequency: "tried", stance: "cautious" }), { frequency: "tried", uses: [], tools: [], stance: "cautious", offer: [] });
   const bad = [

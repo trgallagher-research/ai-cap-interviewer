@@ -7,7 +7,7 @@
  *
  * Pure functions and data only: no server imports, safe in client components.
  */
-import type { Answers, ChatMessage, Domain, LadderStep, Member, Phase, Profile, Question, RateItem, Ratings, Stance, Turn } from "./types";
+import type { Answers, ChatMessage, Domain, LadderStep, Member, Phase, Profile, Question, QuestionOption, QuestionPage, RateItem, Ratings, SelfCheck, Stance, Turn } from "./types";
 
 /** First user message of every interview (the instruction block is the system prompt). */
 export const KICKOFF = "[The interview begins now.]";
@@ -45,9 +45,80 @@ export const KICKOFF = "[The interview begins now.]";
   export const PHASES: Phase[] = ["orient", "practice", "stretch", "rate", "close"];
 
   // ---------------------------------------------------------------------------
-  // 0. Opening questionnaire (about one minute). Self-report: it routes the interview and
+  // 0. Opening questionnaire (four short pages). Self-report: it routes the interview and
   //    fills the map's skeleton, but practice is still coded from described episodes.
   // ---------------------------------------------------------------------------
+
+  const AGREE: QuestionOption[] = [
+    { key: "sd", label: "Strongly disagree" }, { key: "d", label: "Disagree" }, { key: "n", label: "Neither" },
+    { key: "a", label: "Agree" }, { key: "sa", label: "Strongly agree" },
+  ];
+  const YESNO: QuestionOption[] = [{ key: "yes", label: "Yes" }, { key: "no", label: "No" }];
+  const OFTEN: QuestionOption[] = [
+    { key: "never", label: "Never" }, { key: "sometimes", label: "Sometimes" }, { key: "often", label: "Often" }, { key: "always", label: "Always" },
+  ];
+  /** Answers that count as agreeing / doing it, per scale (used for the self-check and the organiser counts). */
+  export const POSITIVE: Record<string, string[]> = { views: ["a", "sa"], skills: ["yes", "often", "always"], support: ["yes"] };
+
+  function BLOCK_QUESTIONS(): Record<string, Question> {
+    const notNever = { frequency: ["never"] };
+    const q = (id: string, label: string, block: Question["block"], options: QuestionOption[], extra: Partial<Question> = {}): [string, Question] =>
+      [id, { id, type: "single", label, block, options, ...extra }];
+    return Object.fromEntries([
+      // Views: conviction and urgency, then doubts and reluctance (5-point agreement).
+      q("viewEssential", "I believe using AI is essential to doing my job well.", "views", AGREE, { group: "conviction", sub: "Conviction and urgency" }),
+      q("viewQuality", "I believe AI will improve the quality of my work.", "views", AGREE, { group: "conviction" }),
+      q("viewChange", "I expect my work to change significantly because of AI in the coming years.", "views", AGREE, { group: "conviction" }),
+      q("viewBehind", "I feel I will fall behind if I don't (start to) use AI.", "views", AGREE, { group: "conviction" }),
+      q("doubtReliability", "I worry about the reliability of AI output.", "views", AGREE, { group: "doubt", sub: "Doubts and reluctance" }),
+      q("doubtPrivacy", "I have concerns about privacy, data security or confidentiality when using AI.", "views", AGREE, { group: "doubt" }),
+      q("doubtCraft", "I feel AI could undermine the craftsmanship or human side of my work.", "views", AGREE, { group: "doubt" }),
+      q("doubtEthics", "I have ethical or societal objections to AI (e.g. environmental impact, copyright, effects on jobs).", "views", AGREE, { group: "doubt" }),
+      q("doubtPressure", "I feel pressured to use AI, even though I don't see the added value myself.", "views", AGREE, { group: "doubt" }),
+      q("doubtTime", "I simply don't have the time or energy to learn it.", "views", AGREE, { group: "doubt" }),
+      ["reservation", { id: "reservation", type: "text", max: 300, label: "What is your biggest reservation about using AI in your work? (optional)", options: [] }],
+      // Skills: concrete behaviour, basic to advanced (skipped for people who never use AI).
+      q("skillFollowUp", "I ask an AI tool follow-up questions to improve its first answer.", "skills", YESNO, { level: 1, skipIf: notNever }),
+      q("skillCheck", "I check AI output for errors before using it.", "skills", OFTEN, { level: 1, skipIf: notNever }),
+      q("skillOwnMaterial", "I have given an AI tool my own material to work with (e.g. notes, a report, a transcript).", "skills", YESNO, { level: 2, skipIf: notNever }),
+      q("skillPrompt", "I write prompts that include context, a role and an example of the desired output.", "skills", OFTEN, { level: 2, skipIf: notNever }),
+      q("skillAnonymise", "I remove names and identifying details before putting client material into an AI tool.", "skills",
+        [...OFTEN, { key: "na", label: "I don't put client material in" }], { level: 3, skipIf: notNever }),
+      q("skillReusable", "I have built a reusable workflow, template or custom assistant.", "skills", YESNO, { level: 4, skipIf: notNever }),
+      q("skillAgents", "I can set up AI agents that carry out multi-step tasks for me (e.g. Claude Code, Codex).", "skills", YESNO, { level: 4, skipIf: notNever }),
+      // Two short knowledge checks: a scenario with one careful answer.
+      q("scenarioCheck", "An AI tool has summarised a 20-page client report for you. The summary reads well and sounds confident. What would you do before sending it to the client?", "scenario", [
+        { key: "send", label: "Send it: it reads well, and the tool has read the whole report" },
+        { key: "ask", label: "Ask the AI tool to confirm that its summary is accurate" },
+        { key: "verify", label: "Check its key points and figures against the report, and look for what it left out" },
+        { key: "tone", label: "Read it once more for tone and typos, then send it" },
+        { key: "unsure", label: "I'm not sure" },
+      ], { correct: "verify", sub: "Two short scenarios: which would you do?" }),
+      q("scenarioData", "You want help drafting a report about a conflict in a client's team, using a free AI chat tool. Which is the most sensible approach?", "scenario", [
+        { key: "paste", label: "Paste in my full notes: the tool does not share them with anyone" },
+        { key: "strip", label: "Remove names and identifying details first, and check what my agreements with the client allow" },
+        { key: "gdpr", label: "Use it only if the tool says it is GDPR-compliant, then paste in my notes" },
+        { key: "unsure", label: "I'm not sure" },
+      ], { correct: "strip" }),
+      // Support: access, then use.
+      q("supInOrg", "In my organisation there is someone I can turn to with questions about AI (e.g. AI lead, IT department, trained colleague).", "support",
+        [...YESNO, { key: "na", label: "I work independently" }], { group: "access", sub: "Access" }),
+      q("supOutside", "Outside work, I know someone with AI knowledge I could approach (e.g. friend, family member, network contact).", "support", YESNO, { group: "access" }),
+      q("supFormal", "I have access to formal learning resources on AI (e.g. training, courses, internal knowledge base).", "support", YESNO, { group: "access" }),
+      q("supOnline", "I follow online sources to learn about AI (e.g. YouTube, newsletters, communities, forums).", "support", YESNO, { group: "access" }),
+      q("supAsked", "I have asked an expert or knowledgeable colleague for help with AI in the past six months.", "support", YESNO, { group: "use", sub: "Use of that support" }),
+      q("supTraining", "I have taken part in an AI training or workshop.", "support", YESNO, { group: "use" }),
+      q("supSelfTaught", "I learn mostly by trying things out on my own.", "support", YESNO, { group: "use" }),
+      ["whyNot", { id: "whyNot", type: "multi", other: true, skipIf: { supAsked: ["yes"] }, skipIfEmpty: ["supAsked"],
+        label: "You have not asked anyone for help with AI recently. Why not? Tick any.", options: [
+          { key: "dontKnow", label: "I don't know who to ask" },
+          { key: "embarrassed", label: "I feel embarrassed about how little I know" },
+          { key: "noTime", label: "I don't have the time" },
+          { key: "busy", label: "The people I could ask are too busy or hard to reach" },
+          { key: "noNeed", label: "I don't feel the need" },
+        ] }],
+    ] as [string, Question][]);
+  }
 
   export const QUESTIONNAIRE: Record<string, Question> = {
     frequency: {
@@ -66,7 +137,10 @@ export const KICKOFF = "[The interview begins now.]";
     uses: {
       id: "uses", type: "multi", skipIf: { frequency: ["never"] },
       label: "What have you used it for in your work? Tick all that apply.",
-      options: DOMAINS.map((d) => ({ key: d.key, label: d.label, hint: d.hint })),
+      options: [
+        ...DOMAINS.map((d) => ({ key: d.key, label: d.label, hint: d.hint })),
+        { key: "search", label: "Instead of a search engine", hint: "looking things up, quick questions, finding sources: where you would have used Google" },
+      ],
     },
     tools: {
       id: "tools", type: "multi", skipIf: { frequency: ["never"] }, other: true,
@@ -124,8 +198,21 @@ export const KICKOFF = "[The interview begins now.]";
         { key: "no",    label: "Not really" },
       ],
     },
+    ...BLOCK_QUESTIONS(),
   };
-  export const QUESTION_ORDER: string[] = ["frequency", "uses", "tools", "stance", "offer", "pay", "canShow"];
+
+  /** The questionnaire is shown as four short pages; the answers are one flat object. */
+  export const PAGES: QuestionPage[] = [
+    { id: "basics", title: "How AI shows up in your work", intro: "A few quick questions first.",
+      qids: ["frequency", "uses", "tools", "stance"] },
+    { id: "views", title: "How you see AI and your work", intro: "How much do you agree with each statement? There are no right answers: doubts are as useful to us as enthusiasm. Skip any you would rather not answer.",
+      qids: ["viewEssential", "viewQuality", "viewChange", "viewBehind", "doubtReliability", "doubtPrivacy", "doubtCraft", "doubtEthics", "doubtPressure", "doubtTime", "reservation"] },
+    { id: "skills", title: "What you actually do", intro: "Concrete things people do with AI, from basic to advanced. Answer for what you do now, not what you could do. It is fine to answer no to most of them.",
+      qids: ["skillFollowUp", "skillCheck", "skillOwnMaterial", "skillPrompt", "skillAnonymise", "skillReusable", "skillAgents", "canShow", "scenarioCheck", "scenarioData"] },
+    { id: "support", title: "Help and support", intro: "Where you could turn with questions about AI, whether you do, and what would be worth your time.",
+      qids: ["supInOrg", "supOutside", "supFormal", "supOnline", "supAsked", "supTraining", "supSelfTaught", "whyNot", "offer", "pay"] },
+  ];
+  export const QUESTION_ORDER: string[] = PAGES.flatMap((pg) => pg.qids);
 
   /** True when a question should be skipped given the answers so far. */
   export function questionSkipped(qid: string, answers: Answers | Record<string, unknown> | null | undefined): boolean {
@@ -161,12 +248,75 @@ export const KICKOFF = "[The interview begins now.]";
       if (questionSkipped(qid, a)) continue;
       const v = rec[qid];
       let txt: string;
+      if (q.type === "text") { if (v) lines.push(`- ${q.label} "${v}"`); continue; }
+      if (q.block && !v) continue; // unanswered statements are left out
       if (Array.isArray(v)) txt = v.length ? v.map((k) => optionLabel(qid, String(k))).join("; ") : "(none ticked)";
       else txt = v ? optionLabel(qid, String(v)) : "(not answered)";
       const other = rec[qid + "Other"];
       if (other) txt = (Array.isArray(v) && !v.length ? "" : txt + "; ") + "other: " + other;
       lines.push(`- ${q.label} ${txt}`);
     }
+    return lines.join("\n");
+  }
+
+  /** Gap (confidence mean minus skill index) at which confidence and concrete skills count as out of step. */
+  export const CALIBRATION_GAP = 30;
+  const SKILL_SCORE: Record<string, number> = { yes: 1, no: 0, always: 1, often: 2 / 3, sometimes: 1 / 3, never: 0 };
+
+  /**
+   * The questionnaire blocks reduced to a few numbers, in code: a 0–100 skill index from the concrete
+   * skill items (weighted by level, so advanced behaviour counts more), scenario results, conviction,
+   * doubts agreed with, and support. The confidence mean (0–100, from the ratings) is compared with the
+   * skill index; a large gap is a signal, not a verdict.
+   */
+  export function computeSelfCheck(a: Answers | null | undefined, confidenceMean: number | null | undefined): SelfCheck | null {
+    if (!a) return null;
+    const rec = a as Record<string, unknown>;
+    const has = (qid: string) => typeof rec[qid] === "string" && rec[qid] !== "" && !questionSkipped(qid, a);
+    let wSum = 0, wScore = 0, skillsAnswered = 0, answered = 0, careful = 0, convN = 0, convSum = 0;
+    const doubts: string[] = [], access: string[] = [], used: string[] = [];
+    for (const qid of QUESTION_ORDER) {
+      const q = QUESTIONNAIRE[qid];
+      if (!q.block || !has(qid)) continue;
+      const v = rec[qid] as string;
+      if (q.block === "skills" && v in SKILL_SCORE) { const w = q.level || 1; wSum += w; wScore += w * SKILL_SCORE[v]; skillsAnswered++; }
+      if (q.block === "scenario") { answered++; if (v === q.correct) careful++; }
+      if (q.block === "views") {
+        const i = AGREE.findIndex((o) => o.key === v);
+        if (q.group === "conviction" && i >= 0) { convN++; convSum += i + 1; }
+        if (q.group === "doubt" && POSITIVE.views.includes(v)) doubts.push(qid);
+      }
+      if (q.block === "support" && v === "yes") (q.group === "access" ? access : used).push(qid);
+    }
+    const skillIndex = skillsAnswered ? Math.round((100 * wScore) / wSum) : null;
+    const mean = typeof confidenceMean === "number" && Number.isFinite(confidenceMean) ? confidenceMean : null;
+    const gap = skillIndex !== null && mean !== null ? Math.round(mean - skillIndex) : null;
+    const kind = gap === null ? "unknown" : gap >= CALIBRATION_GAP ? "confidence-above-skills" : gap <= -CALIBRATION_GAP ? "skills-above-confidence" : "in-line";
+    return {
+      skillIndex, skillsAnswered,
+      scenarios: { answered, careful },
+      conviction: convN ? Math.round((convSum / convN) * 10) / 10 : null,
+      doubts, access, used,
+      whyNot: Array.isArray(rec.whyNot) && !questionSkipped("whyNot", a) ? (rec.whyNot as string[]).slice() : [],
+      reservation: typeof rec.reservation === "string" ? rec.reservation : "",
+      calibration: { kind, gap },
+    };
+  }
+
+  /** Plain-text reading of the self-check for the profile prompt. */
+  export function formatSelfCheck(sc: SelfCheck | null): string {
+    if (!sc) return "(no questionnaire answers)";
+    const lbl = (ids: string[]) => ids.map((id) => QUESTIONNAIRE[id].label.replace(/\.$/, "")).join("; ");
+    const lines = [
+      `- Concrete skill index (from the skill items, advanced behaviour weighted more): ${sc.skillIndex === null ? "not answered" : sc.skillIndex + " / 100"}`,
+      `- Scenarios: ${sc.scenarios.answered ? `${sc.scenarios.careful} of ${sc.scenarios.answered} answered with the careful option (checking key points against the source; removing identifying details and checking client agreements)` : "not answered"}`,
+      `- Conviction (mean agreement, 1 = strongly disagree, 5 = strongly agree): ${sc.conviction === null ? "not answered" : sc.conviction}`,
+      `- Doubts they agreed with: ${sc.doubts.length ? lbl(sc.doubts) : "none"}`,
+      `- Support they have: ${sc.access.length ? lbl(sc.access) : "none named"}`,
+      `- Support they used: ${sc.used.length ? lbl(sc.used) : "none"}`,
+      `- Why they have not asked for help: ${sc.whyNot.length ? sc.whyNot.map((k) => optionLabel("whyNot", k)).join("; ") : "n/a"}`,
+      `- Confidence vs concrete skills: ${sc.calibration.kind === "unknown" ? "cannot compare (ratings or skill items missing)" : `${sc.calibration.kind} (confidence mean minus skill index = ${sc.calibration.gap})`}`,
+    ];
     return lines.join("\n");
   }
 
@@ -237,7 +387,11 @@ they handle client confidentiality, what they do that colleagues could not yet d
 still cannot get it to do.
 - This is a SHORT interview: ask 4 to 7 questions, then request the ratings. The questionnaire \
 below already covers how often they use AI, for what, with which tools, how they feel about it, \
-and what they would value or pay for. Never ask those again. Your job is the part a \
+their conviction and doubts, a list of concrete skills, two short scenarios, where they get help, \
+and what they would value or pay for. Never ask those again. Use the skill answers to choose where \
+to dig: ask for a real instance of something they said they do (especially the most advanced \
+thing they said yes or often to), so the episode shows what the tick means. If they wrote a \
+reservation, you may ask once, in the stretch questions, what it is grounded in. Your job is the part a \
 questionnaire cannot get: concrete episodes and where their edges are. Do not pad. Never ask \
 again anything they answered; if an answer shows (not answered) or (none ticked), you may ask it \
 once inside an episode ("Which tool was that?").
@@ -396,6 +550,8 @@ and ask your first question.`;
       const r = ratings ? ratings[it.id] : undefined;
       return `- [level ${it.level}] ${it.task} → ${typeof r === "number" ? r : "skipped"}`;
     });
+    const rated = (items || []).map((it) => (ratings ? ratings[it.id] : undefined)).filter((v): v is number => typeof v === "number");
+    const sc = computeSelfCheck(answers, rated.length ? Math.round(rated.reduce((x, y) => x + y, 0) / rated.length) : null);
     return `\
 You are writing the profile for one member who has just finished the AI at Work Diagnostic \
 interview for Systeeminterventies (a Dutch network of managers, advisers, trainers and coaches \
@@ -423,6 +579,13 @@ ${ratingLines.length ? ratingLines.join("\n") : "(no ratings were given)"}
 The two readings are kept separate on purpose: the organiser wants to see where confidence and \
 practice diverge. Do not smooth one towards the other.
 
+# Concrete skills, scenarios, views and support (computed in code from the questionnaire)
+${formatSelfCheck(sc)}
+Self-assessment is least reliable for people with little experience: they often cannot yet judge \
+what they do or how well. Treat a large gap between confidence and the concrete skills (or the \
+described practice, or a scenario answered without the careful option) as a signal worth naming \
+gently, never as a verdict.
+
 # Domains (use ONLY these keys; include a domain only with a quote or close paraphrase as evidence)
 ${DOMAINS.map((d) => `- ${d.key}: ${d.label} (${d.hint})`).join("\n")}
 
@@ -432,13 +595,33 @@ ${DOMAINS.map((d) => `- ${d.key}: ${d.label} (${d.hint})`).join("\n")}
 - Reflect back what stood out in their practice. Name one or two real strengths grounded in \
 episodes they described (a non-user can have strengths: clear judgement about risk, a precise \
 sense of what their work needs).
-- Then one or two next steps. Each must fit the work they described (their clients, their \
-sessions, their documents), be doable within two weeks without new tools or budget, and name \
-how they would know it worked. A next step for a daily user stretches them (verification habits, \
-sharing a method, a boundary on client data); for a non-user it is a low-risk first experiment \
-on their own material, or a legitimate reason not to, if that is what they expressed.
-- If confidence and described practice diverge, say so kindly and usefully ("you rated yourself \
-cautiously on X, yet you described doing exactly that last month").
+- Then two or three pieces of advice ("nextSteps"). Each has a short why for them and two or three \
+specific next steps they can take, matched to their level: a tool or feature to try, an exercise, \
+or a use case from their own work (their clients, their sessions, their documents). Say how they \
+would know it worked. Tailor the advice to their whole profile: conviction and doubts, concrete \
+skills and scenario answers, access to support, and willingness to pay. A daily user is \
+stretched (verification habits, sharing a method, a boundary on client data, building something \
+reusable); a beginner gets small, safe first steps on their own material.
+- Scepticism is a valid position, not a deficit. For someone who is doubtful, uneasy or agreed \
+with several doubts, take their concerns seriously in their own terms: suggest low-risk ways to \
+explore AI within their own boundaries, or confirm a legitimate reason not to, rather than pushing \
+adoption. Never argue them out of a concern.
+- Use their support answers to make the advice concrete. If they have someone to ask but have not \
+asked, suggest a specific first step (a question to bring, a short session to propose). If they \
+have no one, point to a type of external route (a course, a community of practice, coaching, a \
+peer group in this network). Address their reason for not asking (no time, embarrassment, not \
+knowing who) kindly.
+- "followUp": where relevant, one follow-up route that fits their willingness to pay: if they \
+would pay, a paid route such as a training, a workshop or coaching; if possibly or not sure, a \
+low-cost try-out first; if not, self-study or a peer exchange. Describe routes by type; never name \
+a specific course, provider, community or website, because you cannot check that it exists. \
+Tools may be named only if they are widely known and they mentioned them or they are standard \
+(e.g. the chat tool they already use).
+- "calibration": if their confidence ratings and their concrete skills, scenario answers or \
+described practice diverge, say so kindly and usefully in one or two sentences ("you rated \
+yourself cautiously on X, yet you described doing exactly that last month"; "you feel quite \
+sure about checking output; one scenario suggests a quicker check than the work may need"). \
+Empty string if they line up or there is too little to compare.
 - Never invent views, tools or episodes they did not mention. Where there is little signal, say \
 so rather than fill the gap. No scores in the feedback text.
 
@@ -465,7 +648,9 @@ so rather than fill the gap. No scores in the feedback text.
     "headline": "one warm line, e.g. 'Thanks ${name}: here is what stood out'",
     "summary": "2–3 sentences, second person",
     "strengths": [ "1–2 items, each one sentence, grounded in an episode" ],
-    "nextSteps": [ { "title": "short imperative", "detail": "2–3 sentences: what, on what material, how they will know it worked" } ],
+    "nextSteps": [ { "title": "short imperative", "detail": "1–2 sentences: why this, for them, and how they will know it worked", "steps": [ "2–3 specific next steps, each one sentence" ] } ],   // 2–3 pieces of advice
+    "calibration": "one or two gentle sentences, or empty string",
+    "followUp": "one or two sentences on a follow-up route that fits their willingness to pay, or empty string",
     "closing": "one warm sentence"
   },
   "quotes": [ "2–4 short verbatim lines from the member that could be shared anonymously" ]
@@ -491,7 +676,19 @@ ${transcriptText(turns)}`;
       wants: p.wants,
       offers: p.offers,
       wouldPayFor: p.productSignals && p.productSignals.wouldPayFor,
+      pay: p.productSignals && p.productSignals.pay,
       quotes: p.quotes,
+      ...(p.selfCheck ? {
+        skillIndex: p.selfCheck.skillIndex,
+        scenariosCareful: `${p.selfCheck.scenarios.careful} of ${p.selfCheck.scenarios.answered}`,
+        conviction: p.selfCheck.conviction,
+        doubts: p.selfCheck.doubts,
+        supportHave: p.selfCheck.access,
+        supportUsed: p.selfCheck.used,
+        whyNotAsked: p.selfCheck.whyNot,
+        reservation: p.selfCheck.reservation,
+        confidenceVsSkills: p.selfCheck.calibration.kind,
+      } : {}),
     };
   }
 
@@ -549,7 +746,9 @@ profiles and statistics. Give her a sober product read in ONE JSON object and no
 
 Be specific to what these members actually said they would value or pay for, and to the shape \
 of the practice spread (where the mass of the network is, where the gaps are, who could act as \
-peer teachers). Weigh honestly: say what the evidence does not support. Prefer offers that use \
+peer teachers). Where present, use their support answers (who has someone to ask, who has asked, \
+why not), their doubts and their concrete skills: members with no one to ask, or who do not ask \
+out of embarrassment, are a different market from members who learn on their own. Weigh honestly: say what the evidence does not support. Prefer offers that use \
 the network's own expertise over generic AI training. Keep every string short and plain.
 
 Statistics: ${JSON.stringify(stats)}

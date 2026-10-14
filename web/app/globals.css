@@ -213,6 +213,17 @@ fieldset.q legend { font-family: var(--font-display); font-weight: 600; font-siz
 .q-other { max-width: 24rem; font-weight: 400; }
 .q-error { color: var(--bad); font-size: 0.875rem; font-weight: 500; }
 fieldset.q.invalid .opt { border-color: var(--bad); }
+/* Statement items: one compact row of answer pills per statement. */
+.q-form:has(.q-item) { gap: 1.1rem; }
+.q-sub { font-size: 0.8rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 0.6rem 0 -0.4rem; }
+fieldset.q.q-item { gap: 0.4rem; }
+fieldset.q.q-item legend { font-family: var(--font-body); font-weight: 500; font-size: 1rem; margin-bottom: 0.4rem; }
+.q-options.q-scale { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.opt.pill { padding: 0.35rem 0.7rem; border-radius: 999px; align-items: center; gap: 0.4rem; font-size: 0.9rem; }
+.opt.pill input { margin: 0; width: 0.95rem; height: 0.95rem; }
+.opt.pill .opt-label { font-weight: 400; }
+.q-text { width: 100%; resize: vertical; font: inherit; }
+.step-list { margin: 0.35rem 0 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.25rem; }
 
 /* Member view: quick-reply chips */
 .chips { display: flex; flex-wrap: wrap; gap: 0.5rem; padding-left: 0.25rem; }

@@ -183,7 +183,11 @@ async function samplesOn(page, on) {
   // Import an artifact result code (AIWD1: + base64 JSON), then delete it from the drawer
   const name = "Imported Iris " + RUN;
   const code = await page.evaluate((nm) => {
-    const p = Object.assign({}, window.SEED[0], { id: "p_imp_" + Math.random().toString(36).slice(2, 8), source: "live", member: { name: nm, role: "coach", org: "" } });
+    const s0 = window.SEED[0];
+    const questionnaire = Object.assign({}, s0.questionnaire, { viewEssential: "a", doubtPrivacy: "sa", reservation: "Clients may object", skillCheck: "always", skillAgents: "no", scenarioCheck: "verify", scenarioData: "paste", supOutside: "yes", supAsked: "no", whyNot: ["embarrassed"] });
+    const selfCheck = window.Prompts.computeSelfCheck(questionnaire, 90);
+    const feedback = Object.assign({}, s0.feedback, { nextSteps: [{ title: "Ask once", detail: "d", steps: ["Write the question", "Send it"] }], calibration: "Gently out of step.", followUp: "A low-cost try-out first." });
+    const p = Object.assign({}, s0, { id: "p_imp_" + Math.random().toString(36).slice(2, 8), source: "live", member: { name: nm, role: "coach", org: "" }, questionnaire, selfCheck, feedback });
     const bytes = new TextEncoder().encode(JSON.stringify(p));
     let bin = ""; for (const b of bytes) bin += String.fromCharCode(b);
     return "AIWD1:" + btoa(bin);
@@ -193,6 +197,16 @@ async function samplesOn(page, on) {
   await page.click("#og-import button.primary");
   await page.waitForFunction((n) => document.querySelectorAll("#og-members .og-member").length === n, before + 1, { timeout: 10000 }).catch(() => {});
   check("import of an artifact code adds a member", (await page.textContent("#og-members")).includes(name));
+  await page.waitForSelector("#og-blocks", { timeout: 10000 }).catch(() => {});
+  check("statement-blocks section renders four lists", (await page.$$("#og-blocks .og-list")).length === 4);
+  check("support list: one bar per support statement", (await page.$$("#og-block-support .og-bars li")).length === 7);
+  // Counts must match Engine.stats over the loaded profiles (the member tests store real ones too).
+  const bq = await page.evaluate(async () => window.Engine.stats(await window.OrganiserView.loadProfiles()).questionnaire);
+  const sc = bq.items.scenarioCheck;
+  check("access-not-asked callout matches stats", bq.accessNotAsked >= 1 && (await page.textContent("#og-access-not-asked")).startsWith(bq.accessNotAsked + " "), String(bq.accessNotAsked));
+  check("scenario bars show 'careful' counts", sc.answered >= 1 && (await page.textContent("#og-block-scenario")).includes(`${sc.positive} of ${sc.answered} careful`), JSON.stringify(sc));
+  check("calibration callout matches stats", bq.calibration["confidence-above-skills"] >= 1 && (await page.textContent("#og-calibration")).includes(`${bq.calibration["confidence-above-skills"]} rate their confidence well above`), JSON.stringify(bq.calibration));
+  await noOverflow(page, "organiser with statement blocks");
   await page.fill("#og-import textarea", "not a code at all");
   await page.click("#og-import button.primary");
   await page.waitForSelector("#og-import .msg.bad");
@@ -201,7 +215,10 @@ async function samplesOn(page, on) {
   check("samples off hides SEED and the banner", (await page.$$("#og-members .og-sample-tag")).length === 0 && (await page.$("#og-banner")) === null);
   await page.click(`#og-members .og-member:has-text("${name}")`);
   await page.waitForSelector("#og-drawer");
-  check("imported member shows source imported", (await page.textContent("#og-drawer")).includes("source: imported"));
+  const impText = await page.textContent("#og-drawer");
+  check("imported member shows source imported", impText.includes("source: imported"));
+  check("drawer shows statements, skill check and reservation", impText.includes("Skill check") && impText.includes("confidence well above concrete skills") && impText.includes("Clients may object") && impText.includes("I feel embarrassed"), impText.slice(0, 200));
+  check("drawer shows advice steps, calibration and follow-up", impText.includes("Write the question") && impText.includes("Gently out of step.") && impText.includes("A low-cost try-out first."));
   await page.click("#og-delete");
   await page.waitForSelector("#og-delete-yes");
   check("delete asks for confirmation", (await page.textContent("#og-drawer")).includes("cannot be undone"));

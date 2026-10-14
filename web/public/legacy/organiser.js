@@ -295,6 +295,14 @@
 .og-empty { background: var(--surface); border: 1px dashed var(--line); border-radius: var(--radius-lg); padding: 1.5rem; max-width: 46rem; margin: 1rem 0; }
 .og-empty h2 { margin-bottom: .5rem; }
 .og-empty ol { margin: .5rem 0 0; padding-left: 1.2rem; color: var(--fg-2); display: grid; gap: .3rem; }
+.og-bars { display: grid; gap: .45rem; margin: 0; padding: 0; list-style: none; }
+.og-bars li { display: grid; grid-template-columns: 1fr auto; gap: .15rem .6rem; font-size: .85rem; align-items: baseline; }
+.og-bars .bar { grid-column: 1 / -1; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.og-bars .bar i { display: block; height: 100%; background: var(--og-l3); }
+.og-bars small { color: var(--muted); font-family: var(--font-mono); font-size: .75rem; white-space: nowrap; }
+.og-callout { margin-top: .75rem; font-size: .9rem; }
+.og-cols.og-cols-wide { grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); }
+@media (max-width: 640px) { .og-cols.og-cols-wide { grid-template-columns: 1fr; } }
 .og-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .og-sample-tag { font-family: var(--font-mono); font-size: .68rem; color: var(--muted); border: 1px dashed var(--muted); border-radius: 3px; padding: 0 .3rem; vertical-align: middle; }
 @media (max-width: 640px) {
@@ -737,6 +745,42 @@
   }
   function normKey(t) { return String(t).trim().toLowerCase().replace(/[\s.;:!,]+$/g, ""); }
 
+  /** Views, concrete skills, scenarios and support from the questionnaire blocks: one bar per statement. */
+  function blocksSection(profiles, stats) {
+    const qs = stats.questionnaire;
+    if (!qs || !qs.items) return null;
+    const Q = P().QUESTIONNAIRE;
+    const ids = Object.keys(qs.items);
+    if (!ids.some((id) => qs.items[id].answered)) return null;
+    const short = (id) => Q[id].label.replace(/ \(e\.g\..*?\)/, "").replace(/\.$/, "").replace(/\?$/, "");
+    const bars = (title, sub, block, verb) => {
+      const rows = ids.filter((id) => Q[id].block === block);
+      return el("div", { class: "og-list", id: "og-block-" + block }, [
+        el("h3", null, title), el("div", { class: "sub" }, sub),
+        el("ul", { class: "og-bars" }, rows.map((id) => {
+          const c = qs.items[id]; const pct = c.answered ? Math.round((100 * c.positive) / c.answered) : 0;
+          return el("li", { "data-qid": id }, [
+            el("span", null, block === "scenario" ? Q[id].label.split(".")[0] : short(id)),
+            el("small", null, c.answered ? `${c.positive} of ${c.answered} ${verb}` : "no answers yet"),
+            el("span", { class: "bar", "aria-hidden": "true" }, [el("i", { style: { width: pct + "%" } })]),
+          ]);
+        })),
+      ]);
+    };
+    const whyRows = P().QUESTIONNAIRE.whyNot.options.map((o) => ({ label: o.label, n: qs.whyNot[o.key] || 0 })).filter((r) => r.n).sort((a, b) => b.n - a.n);
+    const support = bars("Help and support", "Who has access to help, and who uses it", "support", "yes");
+    support.appendChild(el("p", { class: "og-callout", id: "og-access-not-asked" }, [el("b", null, String(qs.accessNotAsked || 0)), " have someone to ask, in or outside work, but have not asked for help in the past six months."]));
+    if (whyRows.length) support.appendChild(el("div", null, [el("div", { class: "eyebrow", style: { marginTop: ".6rem" } }, "Why not"), el("ul", { class: "tally" }, whyRows.map((r) => el("li", null, [r.label, " ", el("small", null, "\u00B7 " + r.n)])))]));
+    const cal = qs.calibration || {};
+    const skills = bars("What they actually do", "Said yes, or often or always", "skills", "do");
+    skills.appendChild(el("p", { class: "og-callout", id: "og-calibration" }, `Confidence vs concrete skills: ${cal["confidence-above-skills"] || 0} rate their confidence well above their skills, ${cal["skills-above-confidence"] || 0} well below, ${cal["in-line"] || 0} in line.`));
+    const scen = bars("Scenarios", "Chose the careful answer", "scenario", "careful");
+    const views = bars("Views and doubts", "Agree or strongly agree", "views", "agree");
+    if (qs.search) views.appendChild(el("p", { class: "og-callout" }, `${plural(qs.search, "member")} use AI instead of a search engine.`));
+    return sectionEl("blocks", "Views, skills and support", "Their own answers to the statement blocks before the interview. The skill items and scenarios are a check on self-assessment, not a test: a large gap with confidence is a signal to look at the transcript.",
+      el("div", { class: "og-cols og-cols-wide" }, [views, skills, scen, support]));
+  }
+
   function signalsSection(profiles, stats) {
     const nameOf = (p) => p.member.name + (isSample(p) ? " (sample)" : "");
     const LIMIT = 8;
@@ -1025,7 +1069,9 @@
         p.feedback.headline ? el("p", null, [el("b", null, p.feedback.headline)]) : null,
         p.feedback.summary ? el("p", null, p.feedback.summary) : null,
         (p.feedback.strengths || []).length ? el("ul", null, p.feedback.strengths.map((s) => el("li", null, s))) : null,
-        (p.feedback.nextSteps || []).length ? el("ul", { style: { marginTop: ".4rem" } }, p.feedback.nextSteps.map((s) => el("li", null, [el("b", null, s.title + ": "), s.detail || ""]))) : null,
+        (p.feedback.nextSteps || []).length ? el("ul", { style: { marginTop: ".4rem" } }, p.feedback.nextSteps.map((s) => el("li", null, [el("b", null, s.title + ": "), s.detail || "", (s.steps || []).length ? el("ul", null, s.steps.map((t) => el("li", null, t))) : null]))) : null,
+        p.feedback.calibration ? el("p", null, [el("b", null, "Confidence and practice: "), p.feedback.calibration]) : null,
+        p.feedback.followUp ? el("p", null, [el("b", null, "Going further: "), p.feedback.followUp]) : null,
         p.feedback.closing ? el("p", { class: "og-caption" }, p.feedback.closing) : null,
         !(p.feedback.headline || p.feedback.summary) ? el("p", { class: "og-caption" }, "No feedback text stored.") : null,
       ]),
@@ -1092,6 +1138,21 @@
     add("Worth their time", list("offer", a.offerOther) || "nothing ticked");
     if (!skipped("pay")) add("Would pay", a.pay ? optLabel("pay", a.pay) : "not answered");
     if (!skipped("canShow")) add("Could show a colleague", a.canShow ? optLabel("canShow", a.canShow) : "not answered");
+    const Q = P().QUESTIONNAIRE;
+    const pick = (block, keys) => Object.keys(Q).filter((id) => Q[id].block === block && !skipped(id) && keys.includes(a[id])).map((id) => Q[id].label.replace(/ \(e\.g\..*?\)/, "").replace(/\.$/, ""));
+    const agreed = pick("views", ["a", "sa"]);
+    if (Object.keys(Q).some((id) => Q[id].block && a[id])) {
+      add("Agrees", agreed.join("; ") || "none of the statements");
+      if (!skipped("skillCheck")) add("Does (yes / often / always)", pick("skills", ["yes", "often", "always"]).join("; ") || "none");
+      add("Support they have or used", pick("support", ["yes"]).join("; ") || "none");
+      if (!skipped("whyNot")) add("Why not asked", list("whyNot", a.whyNotOther) || "nothing ticked");
+      if (a.reservation) add("Biggest reservation", "\u201C" + a.reservation + "\u201D");
+    }
+    const sc = p.selfCheck;
+    if (sc) {
+      const cal = { "confidence-above-skills": "confidence well above concrete skills", "skills-above-confidence": "concrete skills well above confidence", "in-line": "confidence in line with concrete skills", "unknown": "cannot compare" }[sc.calibration && sc.calibration.kind] || "";
+      add("Skill check", `skill index ${sc.skillIndex === null ? "n/a" : sc.skillIndex + "/100"}; scenarios ${sc.scenarios.careful} of ${sc.scenarios.answered} careful; ${cal}`);
+    }
     return el("section", { class: "og-qqsec" }, [head, el("dl", { class: "og-qq" }, rows), el("p", { class: "og-caption" }, "Their own answers before the interview. Practice levels and the map come from the examples they gave, not from these ticks.")]);
   }
 
@@ -1165,6 +1226,8 @@
       root.appendChild(importSection(rerender, profiles));
     } else {
       root.appendChild(summarySection(profiles, stats));
+      const blocks = blocksSection(profiles, stats);
+      if (blocks) root.appendChild(blocks);
       root.appendChild(scatterSection(profiles, openDetail));
       root.appendChild(heatmapSection(profiles, stats, openDetail));
       root.appendChild(helpSection(profiles, openDetail));

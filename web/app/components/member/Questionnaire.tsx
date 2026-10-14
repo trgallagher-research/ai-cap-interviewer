@@ -1,11 +1,12 @@
 "use client";
 
-/* The opening questionnaire, rendered entirely from QUESTIONNAIRE in QUESTION_ORDER
- * (port of renderQuestionnaire in prototype/src/member.js). Skipped questions hide live and
- * are dropped from the answers; exclusive options untick the others and vice versa. */
+/* The opening questionnaire, rendered entirely from QUESTIONNAIRE, one PAGES entry at a time
+ * (port of renderQuestionnaire in prototype/src/member.js, now paged). Skipped questions hide live
+ * and are dropped from the answers; exclusive options untick the others and vice versa. Statement
+ * items (views, skills, scenarios, support) render as compact rows of answer pills. */
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { QUESTIONNAIRE, QUESTION_ORDER, questionSkipped } from "@/lib/aiwd/prompts";
+import { PAGES, QUESTIONNAIRE, QUESTION_ORDER, questionSkipped } from "@/lib/aiwd/prompts";
 import { PhaseHint } from "./PhaseHint";
 
 export type Answers = Record<string, string | string[]>;
@@ -18,11 +19,14 @@ interface QOption {
 }
 interface QDef {
   id: string;
-  type: "single" | "multi";
+  type: "single" | "multi" | "text";
   required?: boolean;
   other?: boolean;
   label: string;
   options: QOption[];
+  block?: string;
+  sub?: string;
+  max?: number;
 }
 
 const Q = QUESTIONNAIRE as unknown as Record<string, QDef>;
@@ -40,7 +44,9 @@ export function deriveAnswers(raw: Answers): Answers {
     if (skipped(qid, raw)) continue;
     const v = raw[qid];
     if (q.type === "multi") a[qid] = Array.isArray(v) ? v : [];
-    else if (typeof v === "string" && v) a[qid] = v;
+    else if (q.type === "text") {
+      if (typeof v === "string" && v.trim()) a[qid] = v.trim();
+    } else if (typeof v === "string" && v) a[qid] = v;
     const other = raw[qid + "Other"];
     if (q.other && typeof other === "string" && other.trim()) a[qid + "Other"] = other.trim();
   }
@@ -59,8 +65,12 @@ interface Props {
 export function Questionnaire({ member, initial, busy, error, onChange, onSubmit }: Props) {
   const [raw, setRaw] = useState<Answers>(() => ({ ...initial }));
   const [invalid, setInvalid] = useState<Record<string, boolean>>({});
+  const [page, setPage] = useState(0);
   const setsRef = useRef<Record<string, HTMLFieldSetElement | null>>({});
+  const topRef = useRef<HTMLDivElement | null>(null);
   const answers = useMemo(() => deriveAnswers(raw), [raw]);
+  const last = page === PAGES.length - 1;
+  const pg = PAGES[page];
 
   useEffect(() => {
     onChange(answers);
@@ -92,16 +102,15 @@ export function Questionnaire({ member, initial, busy, error, onChange, onSubmit
     setInvalid((p) => (p[qid] ? { ...p, [qid]: false } : p));
   }
 
-  function setOther(qid: string, v: string) {
-    setRaw((prev) => ({ ...prev, [qid + "Other"]: v }));
+  function setText(key: string, v: string) {
+    setRaw((prev) => ({ ...prev, [key]: v }));
   }
 
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (busy) return;
+  /** Required questions on the current page; focuses the first unanswered one. */
+  function pageValid(): boolean {
     const bad: Record<string, boolean> = {};
     let firstBad: string | null = null;
-    for (const qid of ORDER) {
+    for (const qid of pg.qids) {
       const q = Q[qid];
       if (!q || !q.required || skipped(qid, answers)) continue;
       const v = answers[qid];
@@ -112,24 +121,117 @@ export function Questionnaire({ member, initial, busy, error, onChange, onSubmit
       }
     }
     setInvalid(bad);
-    if (firstBad) {
-      const fs = setsRef.current[firstBad];
-      const inp = fs?.querySelector("input");
-      if (inp) {
-        try {
-          inp.focus({ preventScroll: true });
-        } catch {
-          inp.focus();
-        }
+    if (!firstBad) return true;
+    const fs = setsRef.current[firstBad];
+    const inp = fs?.querySelector("input");
+    if (inp) {
+      try {
+        inp.focus({ preventScroll: true });
+      } catch {
+        inp.focus();
       }
-      fs?.scrollIntoView?.({ block: "center" });
-      return;
     }
+    fs?.scrollIntoView?.({ block: "center" });
+    return false;
+  }
+
+  function go(to: number) {
+    setPage(to);
+    setInvalid({});
+    topRef.current?.scrollIntoView?.({ block: "start" });
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (busy || !pageValid()) return;
+    if (!last) return go(page + 1);
     onSubmit(answers);
   }
 
+  function renderQuestion(qid: string) {
+    const q = Q[qid];
+    if (!q) return null;
+    const multi = q.type === "multi";
+    const compact = !!q.block && q.block !== "scenario";
+    const hide = skipped(qid, raw);
+    const val = raw[qid];
+    const sub = q.sub && !hide ? (
+      <h3 className="q-sub" key={qid + "-sub"}>
+        {q.sub}
+      </h3>
+    ) : null;
+    const fieldset = (
+      <fieldset
+        key={qid}
+        className={"q" + (compact ? " q-item" : "") + (invalid[qid] ? " invalid" : "")}
+        id={"q-" + qid}
+        data-qid={qid}
+        hidden={hide}
+        ref={(n) => {
+          setsRef.current[qid] = n;
+        }}
+      >
+        <legend>
+          {q.label}
+          {q.required ? <span className="q-req"> (required)</span> : null}
+        </legend>
+        {q.type === "text" ? (
+          <textarea
+            className="input q-text"
+            id={`q-${qid}-text`}
+            rows={3}
+            maxLength={q.max || 300}
+            value={typeof val === "string" ? val : ""}
+            onChange={(e) => setText(qid, e.target.value)}
+          />
+        ) : (
+          <div className={"q-options" + (multi ? " multi" : "") + (compact ? " q-scale" : "")}>
+            {q.options.map((o) => {
+              const id = domId(`q-${qid}-${o.key}`);
+              const checked = multi ? Array.isArray(val) && val.includes(o.key) : val === o.key;
+              return (
+                <label key={o.key} className={"opt" + (o.exclusive ? " opt-exclusive" : "") + (compact ? " pill" : "")} htmlFor={id}>
+                  <input
+                    type={multi ? "checkbox" : "radio"}
+                    name={"q-" + qid}
+                    value={o.key}
+                    id={id}
+                    checked={checked}
+                    data-exclusive={o.exclusive ? "1" : undefined}
+                    onChange={(e) => toggle(qid, o, e.target.checked)}
+                  />
+                  <span className="opt-text">
+                    <span className="opt-label">{o.label}</span>
+                    {o.hint ? <span className="opt-hint">{o.hint}</span> : null}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        )}
+        {q.other ? (
+          <label className="field q-other" htmlFor={`q-${qid}-other`}>
+            <span className="small">Other</span>
+            <input
+              className="input"
+              type="text"
+              id={`q-${qid}-other`}
+              maxLength={120}
+              value={typeof raw[qid + "Other"] === "string" ? (raw[qid + "Other"] as string) : ""}
+              onChange={(e) => setText(qid + "Other", e.target.value)}
+            />
+          </label>
+        ) : null}
+        <p className="q-error" id={"q-err-" + qid} role="alert" hidden={!invalid[qid]}>
+          Please choose one.
+        </p>
+      </fieldset>
+    );
+    return sub ? [sub, fieldset] : fieldset;
+  }
+
   return (
-    <div className="stack" id="questionnaire">
+    <div className="stack" id="questionnaire" data-page={pg.id} ref={topRef}>
       <div className="progress">
         <span>
           <PhaseHint step="quick" />
@@ -138,77 +240,35 @@ export function Questionnaire({ member, initial, busy, error, onChange, onSubmit
           {member.name}, {member.role}
         </span>
       </div>
-      <p className="lead">A few quick questions first, about a minute. Then a short conversation about one or two real examples.</p>
+      {page === 0 ? (
+        <p className="lead">A few short pages of questions first. Then a short conversation about one or two real examples.</p>
+      ) : null}
+      <div className="stack-sm">
+        <p className="eyebrow" id="q-step">
+          Part {page + 1} of {PAGES.length}
+        </p>
+        <h2 id="q-page-title">{pg.title}</h2>
+        {page > 0 ? <p className="small">{pg.intro}</p> : null}
+      </div>
 
       <form className="stack q-form" id="q-form" noValidate onSubmit={submit}>
-        {ORDER.map((qid) => {
-          const q = Q[qid];
-          if (!q) return null;
-          const multi = q.type === "multi";
-          const hide = skipped(qid, raw);
-          const val = raw[qid];
-          return (
-            <fieldset
-              key={qid}
-              className={"q" + (invalid[qid] ? " invalid" : "")}
-              id={"q-" + qid}
-              data-qid={qid}
-              hidden={hide}
-              ref={(n) => {
-                setsRef.current[qid] = n;
-              }}
-            >
-              <legend>
-                {q.label}
-                {q.required ? <span className="q-req"> (required)</span> : null}
-              </legend>
-              <div className={"q-options" + (multi ? " multi" : "")}>
-                {q.options.map((o) => {
-                  const id = domId(`q-${qid}-${o.key}`);
-                  const checked = multi ? Array.isArray(val) && val.includes(o.key) : val === o.key;
-                  return (
-                    <label key={o.key} className={"opt" + (o.exclusive ? " opt-exclusive" : "")} htmlFor={id}>
-                      <input
-                        type={multi ? "checkbox" : "radio"}
-                        name={"q-" + qid}
-                        value={o.key}
-                        id={id}
-                        checked={checked}
-                        data-exclusive={o.exclusive ? "1" : undefined}
-                        onChange={(e) => toggle(qid, o, e.target.checked)}
-                      />
-                      <span className="opt-text">
-                        <span className="opt-label">{o.label}</span>
-                        {o.hint ? <span className="opt-hint">{o.hint}</span> : null}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-              {q.other ? (
-                <label className="field q-other" htmlFor={`q-${qid}-other`}>
-                  <span className="small">Other</span>
-                  <input
-                    className="input"
-                    type="text"
-                    id={`q-${qid}-other`}
-                    maxLength={120}
-                    value={typeof raw[qid + "Other"] === "string" ? (raw[qid + "Other"] as string) : ""}
-                    onChange={(e) => setOther(qid, e.target.value)}
-                  />
-                </label>
-              ) : null}
-              <p className="q-error" id={"q-err-" + qid} role="alert" hidden={!invalid[qid]}>
-                Please choose one.
-              </p>
-            </fieldset>
-          );
-        })}
+        {pg.qids.map(renderQuestion)}
         {error}
         <div className="row">
-          <button className="btn primary" type="submit" id="btn-q-continue" disabled={busy}>
-            {busy ? "Starting…" : "Continue to the conversation"}
-          </button>
+          {page > 0 ? (
+            <button className="btn" type="button" id="btn-q-back" disabled={busy} onClick={() => go(page - 1)}>
+              Back
+            </button>
+          ) : null}
+          {last ? (
+            <button className="btn primary" type="submit" id="btn-q-continue" disabled={busy}>
+              {busy ? "Starting…" : "Continue to the conversation"}
+            </button>
+          ) : (
+            <button className="btn primary" type="submit" id="btn-q-next" disabled={busy}>
+              Next
+            </button>
+          )}
         </div>
       </form>
     </div>

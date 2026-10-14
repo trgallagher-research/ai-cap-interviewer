@@ -73,10 +73,26 @@ async function startLanding(page, name, role) {
   await page.waitForSelector("#questionnaire");
 }
 
-async function fillQuestionnaire(page, kind = "weekly") {
+/** The questionnaire is paged: basics → views → skills → support. Next/Back keep the answers. */
+async function qPage(page) { return page.getAttribute("#questionnaire", "data-page"); }
+async function nextPage(page, expected) {
+  await page.click("#btn-q-next");
+  await page.waitForSelector(`#questionnaire[data-page='${expected}']`);
+}
+
+/** Fills all four pages and ends on the last one (the caller clicks #btn-q-continue). */
+async function fillQuestionnaire(page, kind = "weekly", onPage) {
   if (kind === "never") {
     await page.click("label[for='q-frequency-never']");
     await page.click("label[for='q-stance-sceptical']");
+    if (onPage) await onPage("basics");
+    await nextPage(page, "views");
+    await page.click("label[for='q-doubtCraft-sa']");
+    if (onPage) await onPage("views");
+    await nextPage(page, "skills");
+    await page.click("label[for='q-scenarioCheck-unsure']");
+    if (onPage) await onPage("skills");
+    await nextPage(page, "support");
     await page.click("label[for='q-offer-nothing']");
   } else {
     await page.click("label[for='q-frequency-weekly']");
@@ -85,10 +101,26 @@ async function fillQuestionnaire(page, kind = "weekly") {
     await page.click("label[for='q-tools-ChatGPT']");
     await page.fill("#q-tools-other", "Otter");
     await page.click("label[for='q-stance-pragmatic']");
+    if (onPage) await onPage("basics");
+    await nextPage(page, "views");
+    await page.click("label[for='q-viewEssential-a']");
+    await page.click("label[for='q-doubtPrivacy-sa']");
+    await page.fill("#q-reservation-text", "Clients may not want it");
+    if (onPage) await onPage("views");
+    await nextPage(page, "skills");
+    await page.click("label[for='q-skillCheck-always']");
+    await page.click("label[for='q-skillAgents-no']");
+    await page.click("label[for='q-canShow-yes']");
+    await page.click("label[for='q-scenarioCheck-verify']");
+    if (onPage) await onPage("skills");
+    await nextPage(page, "support");
+    await page.click("label[for='q-supOutside-yes']");
+    await page.click("label[for='q-supAsked-no']");
+    await page.click("label[for='q-whyNot-noTime']");
     await page.click("label[for='q-offer-peer-halfday']");
     await page.click("label[for='q-pay-maybe']");
-    await page.click("label[for='q-canShow-yes']");
   }
+  if (onPage) await onPage("support");
 }
 
 async function startInterview(page, name, role, kind = "weekly") {
@@ -113,18 +145,27 @@ async function fullFlow(browser, page, tag, name, opts = {}) {
   await shot("landing");
   if (opts.max) await noOverflow(page, "landing " + tag, opts.max);
   await startLanding(page, name, "team coach, mostly healthcare organisations");
-  // Required validation: continue with nothing ticked
-  await page.click("#btn-q-continue");
+  // Required validation: Next with nothing ticked
+  await page.click("#btn-q-next");
   check("questionnaire shows inline required errors (" + tag + ")", (await page.isVisible("#q-err-frequency")) && (await page.isVisible("#q-err-stance")));
-  check("questionnaire does not advance when invalid (" + tag + ")", (await page.locator("#interview").count()) === 0);
+  check("questionnaire does not advance when invalid (" + tag + ")", (await qPage(page)) === "basics" && (await page.locator("#interview").count()) === 0);
   const fieldsets = await page.locator("#q-form fieldset.q").count();
-  check("questionnaire renders all 7 questions from QUESTIONNAIRE (" + tag + ")", fieldsets === 7, String(fieldsets));
+  check("first page renders the 4 basic questions (" + tag + ")", fieldsets === 4, String(fieldsets));
+  check("progress shows part 1 of 4 (" + tag + ")", (await page.textContent("#q-step")).includes("1 of 4"));
   const qText = await page.textContent("#questionnaire");
-  check("questionnaire labels and hints shown (" + tag + ")", qText.includes("How often does an AI tool") && qText.includes("Would you pay for what you ticked?") && (await page.locator(".opt-hint").count()) >= 8);
-  await fillQuestionnaire(page, "weekly");
-  check("required error clears after answering (" + tag + ")", !(await page.isVisible("#q-err-frequency")));
-  await shot("questionnaire");
-  if (opts.max) await noOverflow(page, "questionnaire " + tag, opts.max);
+  check("questionnaire labels and hints shown (" + tag + ")", qText.includes("How often does an AI tool") && qText.includes("Instead of a search engine") && (await page.locator(".opt-hint").count()) >= 9);
+  await fillQuestionnaire(page, "weekly", async (pg) => {
+    if (pg === "basics") check("required error clears after answering (" + tag + ")", !(await page.isVisible("#q-err-frequency")));
+    if (pg === "views") check("views page: 10 statements + open question (" + tag + ")", (await page.locator("#q-form fieldset.q-item").count()) === 10 && (await page.locator("#q-reservation-text").count()) === 1);
+    if (pg === "skills") check("skills page shows skills, canShow and 2 scenarios (" + tag + ")", (await page.locator("#q-form fieldset.q-item").count()) === 7 && (await page.isVisible("#q-canShow")) && (await page.locator("#q-scenarioCheck, #q-scenarioData").count()) === 2);
+    if (pg === "support") check("why-not shown after 'not asked' (" + tag + ")", (await page.isVisible("#q-whyNot")) && (await page.isVisible("#q-pay")));
+    await shot("questionnaire-" + pg);
+    if (opts.max) await noOverflow(page, "questionnaire " + pg + " " + tag, opts.max);
+  });
+  await page.click("#btn-q-back");
+  await page.waitForSelector("#questionnaire[data-page='skills']");
+  check("Back keeps answers (" + tag + ")", await page.isChecked("#q-skillCheck-always"));
+  await nextPage(page, "support");
   await page.click("#btn-q-continue");
   await page.waitForSelector("#interview", { timeout: 15000 });
   await page.waitForSelector(".bubble.interviewer");
@@ -185,6 +226,9 @@ async function fullFlow(browser, page, tag, name, opts = {}) {
   const fbText = await page.textContent("#feedback");
   check("feedback headline rendered (" + tag + ")", fbText.includes(`Thanks ${name}, here is what stood out`), fbText.slice(0, 120));
   check("feedback has strengths and next step (" + tag + ")", fbText.includes("What stood out") && fbText.includes("Next steps") && fbText.includes("Try one case as a thinking partner"));
+  check("advice has 2 pieces with concrete steps (" + tag + ")", (await page.locator("#feedback .step").count()) === 2 && (await page.locator("#feedback .step-list li").count()) === 5);
+  check("calibration and follow-up shown (" + tag + ")", (await page.isVisible("#fb-calibration")) && (await page.isVisible("#fb-followup")) && fbText.includes("If you want to go further"));
+  check("feedback never shows the skill index (" + tag + ")", !/skill index|skillIndex/i.test(fbText));
   check("feedback shows no level, score or divergence (" + tag + ")", !/Routine|Integrated|Exploring|divergence|aligned|level \d|practice level|\/ 100|average/i.test(fbText), fbText.slice(0, 300));
   check("confidence ratings listed (" + tag + ")", fbText.includes("Your confidence ratings") && fbText.includes("skipped") && fbText.includes("90"));
   check("saved line and no result code (" + tag + ")", fbText.includes("Your answers have been saved for the organiser.") && !/result code|AIWD1:/i.test(fbText) && (await page.locator("#result-code").count()) === 0);
@@ -199,6 +243,9 @@ async function fullFlow(browser, page, tag, name, opts = {}) {
     check("stored profile has ratings and transcript (" + tag + ")", mine.confidence.items.length === 4 && mine.confidence.mean === 75 && Array.isArray(mine.transcript) && mine.transcript.length > 8, JSON.stringify(mine.confidence).slice(0, 200));
     const qa = mine.questionnaire || {};
     check("stored profile carries questionnaire answers (" + tag + ")", qa.frequency === "weekly" && (qa.uses || []).join() === "writing,prep" && qa.toolsOther === "Otter" && qa.pay === "maybe" && qa.canShow === "yes", JSON.stringify(qa));
+    check("stored profile carries statement answers (" + tag + ")", qa.viewEssential === "a" && qa.reservation === "Clients may not want it" && qa.skillCheck === "always" && (qa.whyNot || []).join() === "noTime", JSON.stringify(qa));
+    const sc = mine.selfCheck || {};
+    check("stored profile carries the self-check (" + tag + ")", sc.skillIndex === Math.round(100 * 1 / 5) && sc.scenarios.careful === 1 && sc.access.join() === "supOutside" && sc.whyNot.join() === "noTime", JSON.stringify(sc));
     check("tapped chip recorded as tapped (" + tag + ")", mine.transcript.some((t) => t.role === "member" && t.text === "This month" && t.tapped));
   }
   // Reload on the feedback screen: the finished interview can be shown again (finish is idempotent)
@@ -367,6 +414,10 @@ async function patchNextChips(page, chips) {
       await startLanding(page, "Cees" + RUN, "trainer");
       await page.click("label[for='q-frequency-daily']");
       await page.click("label[for='q-uses-analysis']");
+      await page.click("label[for='q-stance-cautious']");
+      await nextPage(page, "views");
+      await nextPage(page, "skills");
+      await nextPage(page, "support");
       await page.fill("#q-offer-other", "a reading group");
       await page.reload();
       await page.waitForSelector("#draft-card");
@@ -376,8 +427,11 @@ async function patchNextChips(page, chips) {
       const restored = await page.evaluate(() => ({
         daily: document.getElementById("q-frequency-daily").checked,
         analysis: document.getElementById("q-uses-analysis").checked,
-        other: document.getElementById("q-offer-other").value,
       }));
+      await nextPage(page, "views");
+      await nextPage(page, "skills");
+      await nextPage(page, "support");
+      restored.other = await page.inputValue("#q-offer-other");
       check("resume restores questionnaire answers", restored.daily && restored.analysis && restored.other === "a reading group", JSON.stringify(restored));
       check("resume lands on questionnaire, not chat", (await page.locator("#interview").count()) === 0);
       await ctx.close();
@@ -387,8 +441,18 @@ async function patchNextChips(page, chips) {
       const { ctx, page } = await newPage(browser);
       await startLanding(page, "Bram" + RUN, "mediator");
       await page.click("label[for='q-frequency-weekly']");
+      await page.click("label[for='q-stance-pragmatic']");
       const visible = (id) => page.evaluate((i) => !document.getElementById(i).hidden, id);
-      check("uses/tools/canShow visible for weekly", (await visible("q-uses")) && (await visible("q-tools")) && (await visible("q-canShow")));
+      check("uses/tools visible for weekly", (await visible("q-uses")) && (await visible("q-tools")));
+      await nextPage(page, "views");
+      await nextPage(page, "skills");
+      check("skills and canShow visible for weekly", (await visible("q-canShow")) && (await visible("q-skillCheck")) && (await visible("q-scenarioData")));
+      await nextPage(page, "support");
+      check("why-not hidden until 'asked for help' is answered", !(await visible("q-whyNot")));
+      await page.click("label[for='q-supAsked-yes']");
+      check("why-not hidden when they did ask", !(await visible("q-whyNot")));
+      await page.click("label[for='q-supAsked-no']");
+      check("why-not shown when they did not ask", await visible("q-whyNot"));
       check("pay hidden until an offer is ticked", !(await visible("q-pay")));
       await page.click("label[for='q-offer-demos']");
       await page.click("label[for='q-offer-one-to-one']");
@@ -401,15 +465,24 @@ async function patchNextChips(page, chips) {
       const ex2 = await page.evaluate(() => ["demos", "nothing"].map((k) => document.getElementById("q-offer-" + k).checked));
       check("ticking another option unticks 'Nothing for now'", ex2.join() === "true,false", ex2.join());
       await page.click("label[for='q-offer-demos']");
+      await page.click("label[for='q-offer-nothing']");
+      for (const pg of ["skills", "views", "basics"]) { await page.click("#btn-q-back"); await page.waitForSelector(`#questionnaire[data-page='${pg}']`); }
       await page.click("label[for='q-frequency-tried']");
-      check("canShow hidden for tried", !(await visible("q-canShow")) && (await visible("q-uses")));
+      await nextPage(page, "views");
+      await nextPage(page, "skills");
+      check("canShow hidden for tried, skills still shown", !(await visible("q-canShow")) && (await visible("q-skillCheck")));
+      await page.click("label[for='q-skillCheck-often']");
+      for (const pg of ["views", "basics"]) { await page.click("#btn-q-back"); await page.waitForSelector(`#questionnaire[data-page='${pg}']`); }
       await page.click("label[for='q-uses-writing']");
       await page.click("label[for='q-frequency-never']");
-      check("uses/tools/canShow hidden live for never", !(await visible("q-uses")) && !(await visible("q-tools")) && !(await visible("q-canShow")));
+      check("uses/tools hidden live for never", !(await visible("q-uses")) && !(await visible("q-tools")));
       await page.click("label[for='q-stance-sceptical']");
-      await page.click("label[for='q-offer-nothing']");
+      await nextPage(page, "views");
+      await nextPage(page, "skills");
+      check("skills and canShow hidden for never; scenarios still shown", !(await visible("q-skillCheck")) && !(await visible("q-canShow")) && (await visible("q-scenarioCheck")));
+      await nextPage(page, "support");
       const draft = await page.evaluate(() => JSON.parse(localStorage.getItem("aiwd.draft")).answers);
-      check("skipped questions dropped from answers", !("uses" in draft) && !("tools" in draft) && !("canShow" in draft) && !("pay" in draft) && draft.frequency === "never" && draft.offer.join() === "nothing", JSON.stringify(draft));
+      check("skipped questions dropped from answers", !("uses" in draft) && !("tools" in draft) && !("canShow" in draft) && !("pay" in draft) && !("skillCheck" in draft) && draft.frequency === "never" && draft.offer.join() === "nothing" && draft.supAsked === "no", JSON.stringify(draft));
       await page.click("#btn-q-continue");
       await page.waitForSelector("#interview");
       await waitIdle(page);
@@ -533,9 +606,10 @@ async function patchNextChips(page, chips) {
     {
       const { ctx, page } = await newPage(browser, { viewport: { width: 400, height: 800 }, dark: true });
       await startLanding(page, "Anneke", "coach");
-      await fillQuestionnaire(page, "weekly");
-      await page.screenshot({ path: path.join(SHOTS, "member-questionnaire-400-dark-filled.png"), fullPage: true });
-      await noOverflow(page, "questionnaire phone dark", 400);
+      await fillQuestionnaire(page, "weekly", async (pg) => {
+        await page.screenshot({ path: path.join(SHOTS, `member-questionnaire-${pg}-400-dark-filled.png`), fullPage: true });
+        await noOverflow(page, "questionnaire phone dark " + pg, 400);
+      });
       await ctx.close();
     }
   } finally {

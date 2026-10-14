@@ -105,22 +105,19 @@ test("buildInterviewSystem routing: never / tried-with-nothing / uneasy daily us
   const weekly = P.buildInterviewSystem(m, WEEKLY);
   assert.match(weekly, /They said they could show a/);
   assert.doesNotMatch(weekly, /said they feel/);
-  for (const a of [NEVER, TRIED_NOTHING, UNEASY_DAILY, WEEKLY, null]) {
-    assert.equal(P.buildInterviewSystem(m, a), PP.buildInterviewSystem(m, a));
-  }
+  // The web interviewer knows the questionnaire also covers views, skills, scenarios and support.
+  assert.match(weekly, /a list of concrete skills, two short scenarios, where they get help/);
 });
 
-test("prompt text parity with the prototype (profile, share-back, product read, questionnaire)", () => {
-  const turns = [{ role: "interviewer" as const, text: "Hi?" }, { role: "member" as const, text: "This week", tapped: true }];
-  for (const a of [WEEKLY, NEVER, null]) {
-    assert.equal(P.formatQuestionnaire(a), PP.formatQuestionnaire(a));
-    assert.equal(P.buildProfilePrompt({ name: "Anneke", role: "coach" }, turns, RATE_ITEMS, { r1: 50 }, a), PP.buildProfilePrompt({ name: "Anneke", role: "coach" }, turns, RATE_ITEMS, { r1: 50 }, a));
-  }
-  const st = E.stats(SEED);
-  assert.equal(P.buildSharebackPrompt(SEED, st), PP.buildSharebackPrompt(W.SEED, PE.stats(W.SEED)));
-  assert.equal(P.buildProductReadPrompt(SEED, st), PP.buildProductReadPrompt(W.SEED, PE.stats(W.SEED)));
+// Since the second round of feedback (Oct 2026) the web questionnaire, profile prompt and aggregates
+// extend the prototype's; the prototype is frozen. The original questions and shared data still match.
+test("prompt data shared with the prototype; the web questionnaire only adds to it", () => {
+  for (const qid of ["frequency", "tools", "stance", "offer", "pay", "canShow"]) assert.deepEqual(plain(P.QUESTIONNAIRE[qid]), plain(PP.QUESTIONNAIRE[qid]), qid);
+  assert.deepEqual(plain(P.QUESTIONNAIRE.uses.options.slice(0, -1)), plain(PP.QUESTIONNAIRE.uses.options));
+  assert.equal(P.QUESTIONNAIRE.uses.options.at(-1)!.key, "search");
+  // Same lines as the prototype for the original questions ("could show a colleague" moved up a page).
+  for (const a of [WEEKLY, NEVER, null]) assert.deepEqual(P.formatQuestionnaire(a).split("\n").sort(), PP.formatQuestionnaire(a).split("\n").sort());
   assert.equal(P.formatRatingsTurn(RATE_ITEMS, { r1: 10, r3: 90 }), PP.formatRatingsTurn(RATE_ITEMS, { r1: 10, r3: 90 }));
-  assert.deepEqual(plain(P.QUESTIONNAIRE), plain(PP.QUESTIONNAIRE));
   assert.deepEqual(plain(P.DOMAINS), plain(PP.DOMAINS));
   assert.deepEqual(plain(P.LADDER), plain(PP.LADDER));
   assert.deepEqual(plain(P.NUDGES), plain(PP.NUDGES));
@@ -137,8 +134,7 @@ test("interviewMessages: kick-off user turn, never the instruction block; rest i
       assert.ok(mine[0].content.startsWith(P.KICKOFF));
       for (const msg of mine) assert.ok(!msg.content.includes("# Rules of the conversation"));
       // The prototype's first message is system + "\n\n" + kick-off; everything after it is identical.
-      const sys = P.buildInterviewSystem(m, WEEKLY);
-      assert.equal(theirs[0].content, sys + "\n\n" + mine[0].content);
+      assert.ok(theirs[0].content.endsWith("\n\n" + mine[0].content));
       assert.deepEqual(plain(mine.slice(1)), plain(theirs.slice(1)));
       assert.equal(mine[mine.length - 1].role, "user");
     }
@@ -210,7 +206,7 @@ test("full interview parity: same transcript, state and per-call messages as the
   assert.equal(tsLog.length, protoLog.length);
   tsLog.forEach((c, i) => {
     assert.equal(c.system, a.system());
-    assert.equal(protoLog[i][0].content, c.system + "\n\n" + c.messages[0].content);
+    assert.ok(protoLog[i][0].content.endsWith("\n\n" + c.messages[0].content));
     assert.deepEqual(c.messages.slice(1), protoLog[i].slice(1));
   });
   // Round trip.
@@ -220,6 +216,11 @@ test("full interview parity: same transcript, state and per-call messages as the
   const out = { practice: { level: 2, domains: [{ key: "writing", evidence: "x" }, { key: "nope", evidence: "y" }], probedNoEpisode: ["prep", "writing", "admin"], stance: "worried" }, feedback: { headline: "H", nextSteps: [{ title: "T" }, {}] }, quotes: ["q"] };
   const pa: any = plain(E.assembleProfile(a, out, "live")), pb: any = plain(PE.assembleProfile(b, out, "live"));
   for (const k of ["id", "createdAt"]) { delete pa[k]; delete pb[k]; }
+  // Web-only additions: the self-check and the richer feedback fields.
+  assert.equal(pa.selfCheck.skillIndex, null);
+  assert.deepEqual([pa.feedback.calibration, pa.feedback.followUp, pa.feedback.nextSteps[0].steps], ["", "", []]);
+  delete pa.selfCheck; delete pa.feedback.calibration; delete pa.feedback.followUp;
+  for (const n of pa.feedback.nextSteps) delete n.steps;
   assert.deepEqual(pa, pb);
   assert.equal(pa.practice.stance, "pragmatic"); // questionnaire answer wins
   assert.deepEqual(pa.practice.probedNoEpisode, ["prep"]);
@@ -307,7 +308,10 @@ test("chatJson: tolerant parse, one retry, then bad_json", async () => {
 test("seed: identical to prototype; stats, helpMap and per-profile scoring equal seed-check output", () => {
   assert.deepEqual(plain(SEED), plain(W.SEED));
   assert.equal(SEED.length, 16);
-  assert.deepEqual(plain(E.stats(SEED)), plain(PE.stats(W.SEED)));
+  const webStats: any = plain(E.stats(SEED));
+  // Web-only questionnaire aggregates; the seed members predate the statement blocks.
+  for (const k of ["search", "items", "whyNot", "accessNotAsked", "calibration"]) delete webStats.questionnaire[k];
+  assert.deepEqual(webStats, plain(PE.stats(W.SEED)));
   const names = (h: any[]) => h.map((x) => ({ d: x.domain, h: x.helpers.map((p: any) => p.member.name), s: x.seekers.map((p: any) => p.member.name) }));
   assert.deepEqual(plain(names(E.helpMap(SEED))), plain(names(PE.helpMap(W.SEED))));
   for (const p of SEED) {
@@ -325,4 +329,99 @@ test("seed: identical to prototype; stats, helpMap and per-profile scoring equal
   assert.equal(st.n, 16);
   assert.equal(st.questionnaire.answered, 16);
   assert.deepEqual(E.stats([]).byLevel, [0, 0, 0, 0, 0]);
+});
+
+// ---------------------------------------------------------------------------
+// Second-round additions: statement blocks, self-check, richer feedback, aggregates
+// ---------------------------------------------------------------------------
+const BLOCKS_DAILY: Answers = {
+  ...WEEKLY, frequency: "daily", uses: ["writing", "search"],
+  viewEssential: "a", viewQuality: "sa", viewChange: "n", viewBehind: "d", doubtReliability: "a", doubtPrivacy: "sa", doubtTime: "sd",
+  reservation: "It flattens my thinking",
+  skillFollowUp: "yes", skillCheck: "always", skillOwnMaterial: "yes", skillPrompt: "sometimes", skillAnonymise: "na", skillReusable: "no", skillAgents: "no",
+  scenarioCheck: "verify", scenarioData: "paste",
+  supInOrg: "na", supOutside: "yes", supFormal: "no", supOnline: "yes", supAsked: "no", supTraining: "no", supSelfTaught: "yes",
+  whyNot: ["noTime", "embarrassed"],
+};
+
+test("pages cover every question once; block items carry their scale metadata", () => {
+  const ids = P.PAGES.flatMap((pg) => pg.qids);
+  assert.deepEqual(ids, P.QUESTION_ORDER);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.deepEqual(new Set(ids), new Set(Object.keys(P.QUESTIONNAIRE)));
+  assert.equal(P.PAGES.length, 4);
+  for (const id of ids) {
+    const q = P.QUESTIONNAIRE[id];
+    if (q.block === "skills") assert.ok(q.level && q.skipIf && q.skipIf.frequency.includes("never"), id);
+    if (q.block === "scenario") assert.ok(q.options.some((o) => o.key === q.correct), id);
+  }
+});
+
+test("computeSelfCheck: weighted skill index, scenarios, views, support and calibration", () => {
+  const sc = P.computeSelfCheck(BLOCKS_DAILY, 80)!;
+  // weights 1,1,2,2,(na skipped),4,4: (1 + 1 + 2 + 2/3 + 0 + 0) / 14
+  assert.equal(sc.skillIndex, Math.round((100 * (1 + 1 + 2 + 2 * (1 / 3))) / 14));
+  assert.equal(sc.skillsAnswered, 6);
+  assert.deepEqual(sc.scenarios, { answered: 2, careful: 1 });
+  assert.equal(sc.conviction, 3.5); // agree 4, strongly agree 5, neither 3, disagree 2
+  assert.deepEqual(sc.doubts, ["doubtReliability", "doubtPrivacy"]);
+  assert.deepEqual(sc.access, ["supOutside", "supOnline"]);
+  assert.deepEqual(sc.used, ["supSelfTaught"]);
+  assert.deepEqual(sc.whyNot, ["noTime", "embarrassed"]);
+  assert.equal(sc.reservation, "It flattens my thinking");
+  assert.equal(sc.calibration.kind, "confidence-above-skills");
+  assert.equal(P.computeSelfCheck(BLOCKS_DAILY, sc.skillIndex)!.calibration.kind, "in-line");
+  assert.equal(P.computeSelfCheck(BLOCKS_DAILY, 0)!.calibration.kind, "skills-above-confidence");
+  assert.equal(P.computeSelfCheck(BLOCKS_DAILY, null)!.calibration.kind, "unknown");
+  // Never-users skip the skill items: no index, still the scenarios.
+  const nev = P.computeSelfCheck({ ...NEVER, skillCheck: "always", scenarioCheck: "unsure" }, 20)!;
+  assert.equal(nev.skillIndex, null);
+  assert.deepEqual(nev.scenarios, { answered: 1, careful: 0 });
+  assert.equal(P.computeSelfCheck(null, 50), null);
+});
+
+test("profile prompt carries the self-check and the new feedback rules", () => {
+  const pr = P.buildProfilePrompt({ name: "Anneke", role: "coach" }, [], RATE_ITEMS, { r1: 90, r2: 90, r3: 90 }, BLOCKS_DAILY);
+  assert.match(pr, /Concrete skill index \(from the skill items, advanced behaviour weighted more\): \d+ \/ 100/);
+  assert.match(pr, /Scenarios: 1 of 2 answered with the careful option/);
+  assert.match(pr, /Why they have not asked for help: I don't have the time; I feel embarrassed/);
+  assert.match(pr, /confidence-above-skills/);
+  assert.match(pr, /Scepticism is a valid position, not a deficit/);
+  assert.match(pr, /Describe routes by type/);
+  assert.match(pr, /"steps": \[/);
+  assert.doesNotMatch(pr, /without new tools or budget/);
+  assert.match(P.formatQuestionnaire(BLOCKS_DAILY), /What is your biggest reservation about using AI in your work\? \(optional\) "It flattens my thinking"/);
+});
+
+test("assembleProfile stores the self-check and feedback extras; members get feedback but no self-check", async () => {
+  const { memberResult } = await import("../../lib/member");
+  const iv = { member: { name: "Anneke", role: "coach" }, turns: [], rateItems: RATE_ITEMS, ratings: { r1: 90, r2: 90, r3: 90 }, answers: BLOCKS_DAILY, status: "complete" as const };
+  const out = { practice: { level: 2 }, feedback: { headline: "H", nextSteps: [{ title: "A", detail: "d", steps: ["one", "two", "three", "four"] }, { title: "B" }, { title: "C" }, { title: "D" }], calibration: "Gentle.", followUp: "A short course." } };
+  const p = E.assembleProfile(iv as any, out, "live");
+  assert.equal(p.selfCheck!.calibration.kind, "confidence-above-skills");
+  assert.equal(p.feedback.nextSteps.length, 3);
+  assert.deepEqual(p.feedback.nextSteps[0].steps, ["one", "two", "three"]);
+  const mr: any = memberResult(p);
+  assert.equal(mr.feedback.calibration, "Gentle.");
+  assert.equal(mr.feedback.followUp, "A short course.");
+  assert.deepEqual(mr.feedback.nextSteps[0].steps, ["one", "two", "three"]);
+  assert.ok(!("selfCheck" in mr) && !JSON.stringify(mr).includes("skillIndex"));
+});
+
+test("stats: statement counts, why-not, access-not-asked, search and calibration", () => {
+  const iv = (answers: Answers, r: number) => ({ member: { name: "X", role: "r" }, turns: [], rateItems: RATE_ITEMS, ratings: { r1: r, r2: r, r3: r }, answers, status: "complete" as const });
+  const a = E.assembleProfile(iv(BLOCKS_DAILY, 90) as any, { practice: { level: 2 } });
+  const b = E.assembleProfile(iv({ ...BLOCKS_DAILY, supAsked: "yes", whyNot: undefined as any, scenarioData: "strip", uses: ["writing"] }, 30) as any, { practice: { level: 2 } });
+  const c = E.assembleProfile(iv(NEVER, 10) as any, { practice: { level: 0 } });
+  const q = E.stats([a, b, c]).questionnaire;
+  assert.equal(q.search, 1);
+  assert.deepEqual(q.items.scenarioData, { answered: 2, positive: 1 });
+  assert.deepEqual(q.items.viewQuality, { answered: 2, positive: 2 });
+  assert.deepEqual(q.items.skillCheck, { answered: 2, positive: 2 });
+  assert.deepEqual(q.items.supOutside, { answered: 2, positive: 2 });
+  assert.equal(q.whyNot.noTime, 1);
+  assert.equal(q.accessNotAsked, 1);
+  assert.equal(q.calibration["confidence-above-skills"], 1);
+  assert.equal(q.calibration["in-line"], 1);
+  assert.equal(q.calibration.unknown, 1);
 });

@@ -37,7 +37,10 @@ export function validateAnswers(input: unknown): Answers {
     const q = QUESTIONNAIRE[qid];
     const v = raw[qid];
     const keys = new Set(q.options.map((o) => o.key));
-    if (q.type === "multi") {
+    if (q.type === "text") {
+      const t = cleanText(v, qid, q.max || LIMITS_INPUT.other, false);
+      if (t) typed[qid] = t;
+    } else if (q.type === "multi") {
       if (v === undefined || v === null) typed[qid] = [];
       else {
         if (!Array.isArray(v)) bad(`${qid} must be a list`);
@@ -118,6 +121,14 @@ export function sanitiseImported(input: unknown): Record<string, unknown> {
     if (t.tapped === true) out.tapped = true;
     return out;
   });
+  const scIn = OBJ(p.selfCheck);
+  const selfCheck = p.selfCheck ? {
+    skillIndex: N(scIn.skillIndex, 0, 100), skillsAnswered: N(scIn.skillsAnswered, 0, 20) ?? 0,
+    scenarios: { answered: N(OBJ(scIn.scenarios).answered, 0, 10) ?? 0, careful: N(OBJ(scIn.scenarios).careful, 0, 10) ?? 0 },
+    conviction: N(scIn.conviction, 1, 5), doubts: SA(scIn.doubts, 10, 40), access: SA(scIn.access, 10, 40), used: SA(scIn.used, 10, 40),
+    whyNot: SA(scIn.whyNot, 10, 40), reservation: S(scIn.reservation, 300),
+    calibration: { kind: S(OBJ(scIn.calibration).kind, 40) || "unknown", gap: N(OBJ(scIn.calibration).gap, -100, 100) },
+  } : null;
   const selfReport = p.selfReport ? (() => { const sr = OBJ(p.selfReport); return { frequency: S(sr.frequency, 40), domains: SA(sr.domains, 8, 40), tools: SA(sr.tools, 20, 80), canShow: S(sr.canShow, 20) }; })() : null;
   return {
     id: S(p.id, 200),
@@ -139,9 +150,11 @@ export function sanitiseImported(input: unknown): Record<string, unknown> {
     productSignals: { wouldPayFor: S(ps.wouldPayFor, 600), offerKeys: SA(ps.offerKeys, 10, 40), pay: S(ps.pay, 20), quote: S(ps.quote, 600) },
     questionnaire: p.questionnaire ? JSON.parse(JSON.stringify(p.questionnaire, (_k, v) => (typeof v === "string" ? v.slice(0, 600) : v))) : null,
     selfReport,
+    selfCheck,
     feedback: {
       headline: S(fb.headline, 300), summary: S(fb.summary), strengths: SA(fb.strengths, 4),
-      nextSteps: (Array.isArray(fb.nextSteps) ? fb.nextSteps : []).slice(0, 3).map((x) => { const n = OBJ(x); return { title: S(n.title, 200), detail: S(n.detail, 1200) }; }),
+      nextSteps: (Array.isArray(fb.nextSteps) ? fb.nextSteps : []).slice(0, 3).map((x) => { const n = OBJ(x); return { title: S(n.title, 200), detail: S(n.detail, 1200), steps: SA(n.steps, 3, 400) }; }),
+      calibration: S(fb.calibration, 600), followUp: S(fb.followUp, 600),
       closing: S(fb.closing, 600),
     },
     quotes: SA(p.quotes, 6),
