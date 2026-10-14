@@ -7,7 +7,7 @@ import { acquireLock, getInterview, releaseLock, saveInterview } from "@/lib/sto
 import { cleanText, LIMITS_INPUT, validateRatings } from "@/lib/validate";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120; // a turn can make two model calls (missing rating marker retry)
 
 /** Spend guard on top of the engine's own limits: model-calling turn requests per interview
  *  (failed and retried turns included). A normal interview needs about 12. */

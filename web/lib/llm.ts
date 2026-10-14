@@ -66,10 +66,14 @@ function getClient(): Anthropic {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new LlmError("The site is not connected to Claude yet (ANTHROPIC_API_KEY is not set).", "unavailable", 503);
   }
-  // Retries: the SDK retries 429/5xx itself; keep it to one so a turn fits in the 60 s function limit.
-  if (!client) client = new Anthropic({ maxRetries: 1, timeout: 55_000 });
+  // Retries: the SDK retries 429/5xx itself; keep it to one. Timeouts are set per call (see TIMEOUT_MS).
+  if (!client) client = new Anthropic({ maxRetries: 1 });
   return client;
 }
+
+// Per-call timeouts sized to the route limits: interview turns run in a 120 s function (up to two calls),
+// profile / product read / share-back in a 300 s function (finish and generate routes).
+const TIMEOUT_MS = { interview: 55_000, reasoning: 240_000 } as const;
 
 const anthropicLlm: Llm = {
   async chat(system: string, messages: ChatMessage[], opts: { onText?: (text: string) => void; tier: LlmTier }) {
@@ -89,7 +93,7 @@ const anthropicLlm: Llm = {
       fallbacks: "default" as const,
     };
     try {
-      const stream = getClient().beta.messages.stream(params);
+      const stream = getClient().beta.messages.stream(params, { timeout: TIMEOUT_MS[tier === "interview" ? "interview" : "reasoning"] });
       let full = "";
       for await (const event of stream) {
         if (event.type === "content_block_delta" && event.delta.type === "text_delta") {
