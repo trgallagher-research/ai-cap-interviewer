@@ -303,6 +303,16 @@
 .og-callout { margin-top: .75rem; font-size: .9rem; }
 .og-cols.og-cols-wide { grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr)); }
 @media (max-width: 640px) { .og-cols.og-cols-wide { grid-template-columns: 1fr; } }
+.og-whoami { color: var(--muted); font-size: .85rem; }
+.og-admin .og-cols { align-items: start; }
+.og-radio { display: flex; gap: .5rem; align-items: flex-start; padding: .35rem 0; font-size: .92rem; }
+.og-radio input { margin-top: .25rem; accent-color: var(--accent); }
+.og-money { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.og-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.og-table th, .og-table td { text-align: left; padding: .3rem .4rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+.og-table td.num, .og-table th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.og-days { display: flex; align-items: flex-end; gap: 2px; height: 56px; margin: .4rem 0 .2rem; }
+.og-days i { flex: 1; background: var(--og-l3); min-height: 1px; border-radius: 2px 2px 0 0; }
 .og-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .og-sample-tag { font-family: var(--font-mono); font-size: .68rem; color: var(--muted); border: 1px dashed var(--muted); border-radius: 3px; padding: 0 .3rem; vertical-align: middle; }
 @media (max-width: 640px) {
@@ -961,7 +971,7 @@
       const card = el("button", { type: "button", class: "og-member", "data-id": p.id, on: { click: () => openDetail(p) } }, [
         el("div", { class: "name" }, [p.member.name, isSample(p) ? sampleTag() : null, p.endedEarly ? el("span", { class: "pill" }, "stopped early") : null, el("small", null, p.member.role)]),
         el("div", { class: "meta" }, [levelPill(lv), el("span", null, STANCE_LABEL[p.practice.stance] || p.practice.stance), el("span", { class: "mean", title: "Average confidence, 0 to 100" }, mean === null ? "no ratings" : mean + " / 100")]),
-        el("div", { class: "meta" }, [kindPill(kindOf(p))]),
+        el("div", { class: "meta" }, [kindPill(kindOf(p)), p.member.email ? el("span", { class: "pill", title: p.member.email }, "email") : null]),
       ]);
       grid.appendChild(card);
     });
@@ -1041,6 +1051,7 @@
         closeBtn,
       ]),
       el("div", { class: "pills" }, [levelPill(lv), el("span", { class: "pill" }, "stance: " + (STANCE_LABEL[p.practice.stance] || p.practice.stance)), kindPill(kindOf(p)), p.endedEarly ? el("span", { class: "pill warn" }, "interview stopped early") : null, el("span", { class: "pill" }, "source: " + (p.source || "unknown"))]),
+      contactSection(p),
       quickQuestions(p),
       sec("Practice", [
         el("p", null, p.practice.summary || "No summary."),
@@ -1120,6 +1131,122 @@
     btn.addEventListener("click", ask);
     wrap.appendChild(btn); wrap.appendChild(msg);
     return el("section", { class: "og-delsec" }, [el("h3", null, "Remove"), wrap]);
+  }
+
+  /** Email, whether the report was emailed, and the member's private report link. */
+  function contactSection(p) {
+    const em = p.member && p.member.email;
+    const st = p.emailStatus && p.emailStatus.state;
+    const STATE = { sent: "report emailed", failed: "email failed to send", not_configured: "not emailed (email sending is not set up)", not_requested: "not emailed" };
+    const rows = [];
+    rows.push(el("p", null, [el("b", null, "Email: "), em ? el("a", { href: "mailto:" + em }, em) : "not given"]));
+    if (em) rows.push(el("p", { class: "og-caption", id: "og-email-state" }, STATE[st] || (st ? st : "not emailed")));
+    if (p.reportToken) {
+      const url = window.location.origin + "/r/" + p.reportToken;
+      const btn = el("button", { class: "btn quiet", type: "button", id: "og-copy-report", style: { padding: ".2rem .5rem" } }, "Copy report link");
+      btn.addEventListener("click", () => copyText(url, btn));
+      rows.push(el("p", null, [el("b", null, "Their report: "), btn, el("span", { class: "og-caption" }, " private; anyone with the link can read it")]));
+    }
+    return el("section", { class: "og-contact" }, [el("h3", null, "Contact")].concat(rows));
+  }
+
+  const usd = (v) => (v === null || v === undefined ? "n/a" : "$" + (v >= 100 ? v.toFixed(0) : v >= 1 ? v.toFixed(2) : v.toFixed(3)));
+  const KIND_NAMES = { turn: "Interview turns", profile: "Feedback reports", "product-read": "Product read", shareback: "Share-back page", voice: "Voice (Groq)" };
+
+  /** Organiser settings: how members are asked for an email. Any organiser can change it. */
+  function settingsSection() {
+    const box = el("div", { class: "og-list", id: "og-settings-box" }, [el("h3", null, "Member email"), el("div", { class: "sub" }, "Whether the start page asks members for an email address.")]);
+    const status = el("p", { class: "og-caption", id: "og-settings-status" }, "Loading…");
+    const OPTIONS = [
+      ["required", "Required", "Everyone gives an email; their report can be emailed and you can follow up."],
+      ["optional", "Optional", "Members choose; fewer drop-outs, some reports only on screen."],
+      ["none", "Don't ask", "No email collected. Members keep their report through a private link."],
+    ];
+    const form = el("div", { role: "radiogroup", "aria-label": "Member email" });
+    let current = null;
+    const radios = OPTIONS.map(([key, label, hint]) => {
+      const input = el("input", { type: "radio", name: "og-email-mode", id: "og-email-" + key, value: key });
+      input.addEventListener("change", async () => {
+        if (!input.checked) return;
+        status.textContent = "Saving…";
+        try {
+          const s = await window.Store.saveSettings({ emailMode: key });
+          current = s.emailMode; describe(s);
+          toast("Email setting saved");
+        } catch (e) {
+          status.textContent = "Could not save: " + (e && e.message ? e.message : String(e));
+          radios.forEach((r) => { r.checked = r.value === current; });
+        }
+      });
+      form.appendChild(el("label", { class: "og-radio", for: "og-email-" + key }, [input, el("span", null, [el("b", null, label), " \u00B7 ", hint])]));
+      return input;
+    });
+    const describe = (s) => {
+      radios.forEach((r) => { r.checked = r.value === s.emailMode; });
+      status.textContent = s.emailSending
+        ? "Email sending is on: members who give an address get their report by email."
+        : "Email sending is not set up yet, so reports are not emailed. Addresses are still collected when asked, and every member gets a private link on screen.";
+    };
+    box.appendChild(form); box.appendChild(status);
+    window.Store.getSettings().then((s) => { current = s.emailMode; describe(s); }).catch((e) => { status.textContent = "Could not load settings: " + e.message; });
+    return box;
+  }
+
+  /** Estimated spend from the server's cost counters. Owner only (the server returns 403 otherwise). */
+  function costsSection() {
+    const box = el("div", { class: "og-list", id: "og-costs" }, [el("h3", null, "Costs"), el("div", { class: "sub" }, "Estimated from token usage at list prices; only you see this.")]);
+    const body = el("div", null, el("p", { class: "og-caption" }, "Loading…"));
+    box.appendChild(body);
+    window.Store.costs().then((c) => {
+      body.textContent = "";
+      const tile = (label, value, id) => el("div", { class: "og-stat", id }, [el("div", { class: "label" }, label), el("div", { class: "value og-money" }, value)]);
+      body.appendChild(el("div", { class: "og-stats" }, [
+        tile("Total so far", usd(c.total.usd), "og-cost-total"),
+        tile("This month", usd(c.thisMonth), "og-cost-month"),
+        tile("Per finished interview", usd(c.avgPerFinished), "og-cost-avg"),
+      ]));
+      const max = Math.max(0.000001, ...c.days.map((d) => d.usd));
+      body.appendChild(el("div", { class: "eyebrow", style: { marginTop: ".6rem" } }, "Last 30 days"));
+      body.appendChild(el("div", { class: "og-days", role: "img", "aria-label": "Daily spend over the last 30 days" }, c.days.map((d) => el("i", { title: d.date + ": " + usd(d.usd), style: { height: Math.round((100 * d.usd) / max) + "%" } }))));
+      const kinds = Object.keys(c.total.kinds).filter((k) => c.total.kinds[k].calls);
+      if (kinds.length) {
+        body.appendChild(el("table", { class: "og-table", id: "og-cost-kinds" }, [
+          el("thead", null, el("tr", null, [el("th", null, "What"), el("th", { class: "num" }, "Calls"), el("th", { class: "num" }, "Cost")])),
+          el("tbody", null, kinds.map((k) => el("tr", null, [el("td", null, KIND_NAMES[k] || k), el("td", { class: "num" }, String(c.total.kinds[k].calls)), el("td", { class: "num" }, usd(c.total.kinds[k].micro / 1e6))]))),
+        ]));
+      }
+      const ivs = c.interviews.slice().sort((a, b) => b.usd - a.usd).slice(0, 10);
+      if (ivs.length) {
+        body.appendChild(el("div", { class: "eyebrow", style: { marginTop: ".6rem" } }, "Most expensive interviews"));
+        body.appendChild(el("table", { class: "og-table", id: "og-cost-interviews" }, el("tbody", null, ivs.map((i) => el("tr", null, [el("td", null, i.name || "unfinished interview"), el("td", { class: "num" }, String(i.calls) + " calls"), el("td", { class: "num" }, usd(i.usd))])))));
+      }
+      const pr = c.pricing && c.pricing.prices ? Object.entries(c.pricing.prices).filter(([, v]) => v).map(([m, v]) => `${m}: $${v.input} in / $${v.output} out per million tokens`).join("; ") : "";
+      body.appendChild(el("p", { class: "og-caption" }, `Prices used: ${pr}${pr ? "; " : ""}voice $${c.pricing.groqPerHour} per audio hour. The Anthropic Console's usage page for this API key is the actual bill.`));
+    }).catch((e) => { body.textContent = ""; body.appendChild(el("p", { class: "og-caption" }, "Could not load costs: " + e.message)); });
+    return box;
+  }
+
+  /** Who signed in and did what. Owner only. */
+  function activitySection() {
+    const box = el("div", { class: "og-list", id: "og-activity" }, [el("h3", null, "Activity"), el("div", { class: "sub" }, "Sign-ins and changes by organisers; only you see this.")]);
+    const list = el("ul", { class: "full" }, el("li", null, "Loading…"));
+    box.appendChild(list);
+    window.Store.activity().then((entries) => {
+      list.textContent = "";
+      if (!entries.length) { list.appendChild(el("li", null, "Nothing yet.")); return; }
+      entries.slice(0, 30).forEach((e) => {
+        const when = new Date(e.at);
+        list.appendChild(el("li", null, [el("b", null, e.name), " ", e.action, e.detail ? " (" + e.detail + ")" : "", " ", el("small", null, "\u00B7 " + when.toLocaleString())]));
+      });
+    }).catch((e) => { list.textContent = ""; list.appendChild(el("li", null, "Could not load activity: " + e.message)); });
+    return box;
+  }
+
+  /** Settings for everyone; costs and activity for the owner. */
+  function adminSection(me) {
+    const cols = [settingsSection()];
+    if (me && me.role === "owner") { cols.push(costsSection()); cols.push(activitySection()); }
+    return sectionEl("admin", "Settings" + (me && me.role === "owner" ? ", costs and activity" : ""), null, el("div", { class: "og-admin" }, el("div", { class: "og-cols og-cols-wide" }, cols)));
   }
 
   /** The member's quick-question answers in plain words. */
@@ -1203,6 +1330,8 @@
     closeDetail();
     const profiles = await loadProfiles();
     const stats = E().stats(profiles);
+    let me = null;
+    try { me = window.Store && window.Store.me ? await window.Store.me() : null; } catch (_) { me = null; }
     const rerender = (o) => render(container, o);
     currentRerender = rerender;
     const root = el("div", { class: "og-root", id: "og-root" });
@@ -1215,7 +1344,10 @@
         el("h1", null, "AI at Work Diagnostic: the network"),
         el("p", { class: "lede" }, "Who in the network uses AI for what, where the gaps are, who could help whom, and whether there is something worth offering."),
       ]),
-      el("label", { class: "og-toggle", for: "og-samples" }, [toggle, "Show sample members"]),
+      el("div", { style: { display: "flex", flexDirection: "column", gap: ".4rem", alignItems: "flex-end" } }, [
+        me ? el("span", { class: "og-whoami", id: "og-whoami" }, `Signed in as ${me.name} (${me.role})`) : null,
+        el("label", { class: "og-toggle", for: "og-samples" }, [toggle, "Show sample members"]),
+      ]),
     ]));
     const seedN = Array.isArray(window.SEED) ? window.SEED.length : 0;
     if (samplesOn() && seedN) {
@@ -1223,6 +1355,7 @@
     }
     if (!profiles.length) {
       root.appendChild(emptyState());
+      if (window.Store && window.Store.getSettings) root.appendChild(adminSection(me));
       root.appendChild(importSection(rerender, profiles));
     } else {
       root.appendChild(summarySection(profiles, stats));
@@ -1233,6 +1366,7 @@
       root.appendChild(helpSection(profiles, openDetail));
       root.appendChild(signalsSection(profiles, stats));
       root.appendChild(membersSection(profiles, openDetail));
+      if (window.Store && window.Store.getSettings) root.appendChild(adminSection(me));
       root.appendChild(importSection(rerender, profiles));
     }
     container.textContent = "";

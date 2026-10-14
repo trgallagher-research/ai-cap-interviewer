@@ -200,7 +200,14 @@ export interface Profile {
   createdAt: string;
   source: ProfileSource | string;
   importedAt?: string;
-  member: { name: string; role: string; org: string };
+  /** email: only when the member gave one; it never goes into a prompt. */
+  member: { name: string; role: string; org: string; email?: string };
+  /** The interview this profile came from (links it to its cost counters). */
+  interviewId?: string;
+  /** Private report link token (/r/<token>). */
+  reportToken?: string;
+  /** Whether the report was emailed. */
+  emailStatus?: { state: string; at: string };
   practice: {
     level: number;
     levelLabel: string;
@@ -235,6 +242,10 @@ export interface MemberResult {
   feedback: Feedback;
   ratings: { task: string; rating: number | null }[];
   endedEarly: boolean;
+  /** Private report link token; the page builds /r/<token>. */
+  reportToken?: string;
+  /** "sent" when the report was emailed to the member. */
+  emailState?: string;
 }
 
 export interface QuestionnaireStats {
@@ -287,7 +298,7 @@ export type LlmTier = "interview" | "reasoning";
 
 /** Injected LLM: the system block goes in `system`, the transcript in `messages`. */
 export interface Llm {
-  chat(system: string, messages: ChatMessage[], opts: { onText?: (visible: string) => void; tier: LlmTier }): Promise<{ text: string }>;
+  chat(system: string, messages: ChatMessage[], opts: { onText?: (visible: string) => void; tier: LlmTier }): Promise<{ text: string; usage?: unknown }>;
 }
 
 /** Product read shape (prompts.buildProductReadPrompt). */

@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
       return jsonError(409, "This interview has finished.", "finished");
     }
     const endNow = body.endNow === true;
-    const iv = Interview.fromJSON(st, getLlm());
+    const iv = Interview.fromJSON(st, getLlm({ kind: "turn", interviewId: id }));
 
     // 1. Record what the member sent (before the model call).
     let changed = false;

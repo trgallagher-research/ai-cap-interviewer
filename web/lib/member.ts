@@ -43,5 +43,7 @@ export function memberResult(p: Profile): MemberResult {
     },
     ratings: p.confidence.items.map((it) => ({ task: it.task, rating: typeof it.rating === "number" ? it.rating : null })),
     endedEarly: !!p.endedEarly,
+    ...(p.reportToken ? { reportToken: p.reportToken } : {}),
+    ...(p.emailStatus ? { emailState: p.emailStatus.state } : {}),
   };
 }

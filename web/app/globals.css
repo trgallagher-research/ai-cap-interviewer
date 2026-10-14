@@ -223,6 +223,7 @@ fieldset.q.q-item legend { font-family: var(--font-body); font-weight: 500; font
 .opt.pill input { margin: 0; width: 0.95rem; height: 0.95rem; }
 .opt.pill .opt-label { font-weight: 400; }
 .q-text { width: 100%; resize: vertical; font: inherit; }
+#report-url { flex: 1 1 14rem; min-width: 0; font-family: var(--font-mono); font-size: 0.85rem; }
 .step-list { margin: 0.35rem 0 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.25rem; }
 
 /* Member view: quick-reply chips */

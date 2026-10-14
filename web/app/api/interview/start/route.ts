@@ -2,19 +2,28 @@ import type { NextRequest } from "next/server";
 import { Interview } from "@/lib/aiwd/engine";
 import { safeEqual } from "@/lib/auth";
 import { clientIp, errorResponse, jsonError, noStore, readJson } from "@/lib/http";
-import { allowStart, newInterviewId, reserveInterviewSlot, saveInterview } from "@/lib/store";
+import { isEmail } from "@/lib/email";
+import { allowStart, getSettings, newInterviewId, reserveInterviewSlot, saveInterview } from "@/lib/store";
 import { cleanText, LIMITS_INPUT, validateAnswers } from "@/lib/validate";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-/** POST {name, role, answers, accessCode?} → {interviewId}. No model call here. */
+/** POST {name, role, email?, answers, accessCode?} → {interviewId}. No model call here.
+ *  Email follows the organiser's setting: required, optional, or not collected (ignored). */
 export async function POST(req: NextRequest) {
   try {
     const body = await readJson(req);
     const name = cleanText(body.name, "name", LIMITS_INPUT.name, true);
     const role = cleanText(body.role, "role", LIMITS_INPUT.role, true);
     const answers = validateAnswers(body.answers);
+    const { emailMode } = await getSettings();
+    let email = "";
+    if (emailMode !== "none") {
+      email = cleanText(body.email, "email", 200, false).toLowerCase();
+      if (email && !isEmail(email)) return jsonError(400, "That email address does not look right.", "email");
+      if (!email && emailMode === "required") return jsonError(400, "Please enter your email address so we can send you your report.", "email");
+    }
 
     const required = process.env.MEMBER_ACCESS_CODE || "";
     // On a production deployment, starts need an access code unless the site is deliberately open:
@@ -38,7 +47,7 @@ export async function POST(req: NextRequest) {
     const iv = new Interview({ name, role }, answers);
     const now = new Date().toISOString();
     const id = newInterviewId();
-    await saveInterview({ id, state: iv.toJSON(), createdAt: now, updatedAt: now });
+    await saveInterview({ id, state: iv.toJSON(), createdAt: now, updatedAt: now, ...(email ? { email } : {}) });
     return noStore({ interviewId: id });
   } catch (err) {
     return errorResponse(err);

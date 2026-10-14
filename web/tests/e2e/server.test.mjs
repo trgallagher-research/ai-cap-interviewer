@@ -89,7 +89,7 @@ describe("default server (mock LLM, memory store, passcode test)", () => {
 
   test("config", async () => {
     const r = await c.getJson("/api/config");
-    assert.deepEqual(r.body, { voice: false, memberCodeRequired: false, storage: "memory" });
+    assert.deepEqual(r.body, { voice: false, memberCodeRequired: false, storage: "memory", emailMode: "none", emailSending: false });
   });
 
   test("full flow: start → turns (SSE) → ratings → close → finish; member never sees coding", async () => {
@@ -125,7 +125,7 @@ describe("default server (mock LLM, memory store, passcode test)", () => {
 
     const f1 = await c.finish(id);
     assert.equal(f1.status, 200, JSON.stringify(f1.body));
-    assert.deepEqual(Object.keys(f1.body).sort(), ["endedEarly", "feedback", "ratings"]);
+    assert.deepEqual(Object.keys(f1.body).sort(), ["endedEarly", "feedback", "ratings", "reportToken"]);
     assert.equal(f1.body.feedback.headline, "Thanks Anneke, here is what stood out");
     assert.deepEqual(f1.body.ratings.map((r) => r.rating), [80, 90, 30, 60]);
     assert.equal(f1.body.endedEarly, false);
@@ -264,7 +264,7 @@ describe("default server (mock LLM, memory store, passcode test)", () => {
     assert.equal((await c.login("wrong")).status, 401);
     const ok = await c.login("test");
     assert.equal(ok.status, 204);
-    assert.match(ok.raw.join(";"), /aiwd_org=[0-9a-f]{64}.*HttpOnly/i);
+    assert.match(ok.raw.join(";"), /aiwd_org=owner\.[0-9a-f]{64}.*HttpOnly/i);
     assert.match(ok.raw.join(";"), /SameSite=lax/i);
     const r = await c.getJson("/api/organiser/profiles", { cookie: ok.cookie });
     assert.equal(r.status, 200);

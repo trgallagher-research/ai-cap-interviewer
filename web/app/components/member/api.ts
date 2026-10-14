@@ -17,6 +17,9 @@ export interface AppConfig {
   voice: boolean;
   memberCodeRequired: boolean;
   storage: "redis" | "memory";
+  /** The organiser's setting: ask for an email (required/optional) or not at all. */
+  emailMode?: "required" | "optional" | "none";
+  emailSending?: boolean;
 }
 
 export interface InterviewStateResponse {
@@ -45,6 +48,8 @@ export interface FinishResponse {
   feedback: Feedback;
   ratings: { task: string; rating: number | null }[];
   endedEarly: boolean;
+  reportToken?: string;
+  emailState?: string;
 }
 
 export interface TurnDone {
@@ -82,6 +87,7 @@ export async function startInterview(body: {
   role: string;
   answers: Record<string, unknown>;
   accessCode?: string;
+  email?: string;
 }): Promise<{ interviewId: string }> {
   const r = await fetch("/api/interview/start", {
     method: "POST",

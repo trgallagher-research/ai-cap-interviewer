@@ -116,6 +116,15 @@ async function samplesOn(page, on) {
   const cfg = await page.evaluate(async () => (await fetch("/api/config")).json());
   check("memory-storage warning matches /api/config", (await page.locator("#storage-warning").count()) === (cfg.storage === "memory" ? 1 : 0));
   check("samples banner shown", (await page.textContent("#og-banner")).includes("fictional members are shown as samples"));
+  check("header names who is signed in", (await page.textContent("#og-whoami")) === "Signed in as Organiser (owner)");
+  await page.waitForFunction(() => document.querySelector("#og-email-none")?.checked === true, null, { timeout: 10000 }).catch(() => {});
+  check("settings: email setting loaded (default: don't ask)", await page.isChecked("#og-email-none"));
+  check("settings: says email sending is not set up", (await page.textContent("#og-settings-status")).includes("not set up"));
+  await page.waitForSelector("#og-cost-total .value", { timeout: 10000 }).catch(() => {});
+  check("costs panel shows a dollar total (owner)", /^\$\d/.test((await page.textContent("#og-cost-total .value")) || ""), await page.textContent("#og-costs"));
+  check("costs panel lists interview turns and feedback reports", (await page.textContent("#og-cost-kinds")).includes("Interview turns") && (await page.textContent("#og-cost-kinds")).includes("Feedback reports"));
+  await page.waitForFunction(() => !document.querySelector("#og-activity li")?.textContent.includes("Loading"), null, { timeout: 10000 }).catch(() => {});
+  check("activity shows the sign-in", (await page.textContent("#og-activity")).includes("signed in"));
   check("spread bar renders", (await page.$$("#og-summary .og-spreadbar .seg")).length >= 3);
   check("frequency strip renders", (await page.$("#og-freq")) !== null);
   const withMean = await page.evaluate(async () => {
@@ -166,6 +175,7 @@ async function samplesOn(page, on) {
   await page.waitForSelector("#og-drawer"); await page.waitForTimeout(300);
   const drawerText = await page.textContent("#og-drawer");
   check("drawer opens with quick questions, practice and ratings", drawerText.includes("Quick questions") && drawerText.includes("Practice") && (await page.$$("#og-drawer .og-bar")).length >= 1);
+  check("drawer has a contact section", drawerText.includes("Contact") && drawerText.includes("Email:"));
   check("sample member has no Delete in the drawer", (await page.$("#og-delete")) === null);
   await page.screenshot({ path: path.join(SHOTS, "organiser-drawer-1200-light.png") });
   await page.keyboard.press("Escape");

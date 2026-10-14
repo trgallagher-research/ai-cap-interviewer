@@ -9,6 +9,7 @@ import { formatRatingsTurn } from "@/lib/aiwd/prompts";
 import { VoiceButton } from "@/app/components/VoiceButton";
 import * as api from "./api";
 import type { AppConfig, FinishResponse, RateItem, Turn } from "./api";
+import { FeedbackView } from "./FeedbackView";
 import { PhaseHint } from "./PhaseHint";
 import { Questionnaire, type Answers } from "./Questionnaire";
 import { RateCard } from "./RateCard";
@@ -18,7 +19,8 @@ const LS_DRAFT = "aiwd.draft";
 const SS_CODE = "aiwd.accessCode";
 
 type Screen = "landing" | "questionnaire" | "interview" | "preparing" | "feedback" | "finishError";
-type Member = { name: string; role: string };
+type Member = { name: string; role: string; email?: string };
+const EMAIL_RE = /^[^\s@<>()",;:]+@[^\s@<>()",;:]+\.[^\s@<>()",;:]{2,}$/;
 type UITurn = Turn & { ratings?: boolean };
 type DraftCard =
   | { kind: "questionnaire"; member: Member; answers: Answers }
@@ -107,7 +109,8 @@ export function MemberApp() {
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
   const [accessCode, setAccessCode] = useState("");
-  const [landingError, setLandingError] = useState<{ field: "name" | "role" | "code"; text: string } | null>(null);
+  const [email, setEmail] = useState("");
+  const [landingError, setLandingError] = useState<{ field: "name" | "role" | "code" | "email"; text: string } | null>(null);
 
   // questionnaire
   const [member, setMember] = useState<Member | null>(null);
@@ -142,6 +145,7 @@ export function MemberApp() {
   const nameRef = useRef<HTMLInputElement | null>(null);
   const roleRef = useRef<HTMLInputElement | null>(null);
   const codeRef = useRef<HTMLInputElement | null>(null);
+  const emailRef = useRef<HTMLInputElement | null>(null);
 
   // ---------------------------------------------------------------------------
   // Boot: invite code from the URL, config, and any unfinished interview on this device
@@ -162,7 +166,7 @@ export function MemberApp() {
     api
       .getConfig()
       .then(setConfig)
-      .catch(() => setConfig({ voice: false, memberCodeRequired: false, storage: "redis" }));
+      .catch(() => setConfig({ voice: false, memberCodeRequired: false, storage: "redis", emailMode: "none" }));
 
     (async () => {
       const id = lsGet(LS_ID);
@@ -236,6 +240,7 @@ export function MemberApp() {
     setDraftCard(null);
     setName("");
     setRole("");
+    setEmail("");
     setScreen("landing");
     if (typeof window !== "undefined") window.scrollTo(0, 0);
   }, []);
@@ -257,6 +262,18 @@ export function MemberApp() {
       roleRef.current?.focus();
       return;
     }
+    const mode = config?.emailMode || "none";
+    const em = mode === "none" ? "" : email.trim().toLowerCase();
+    if (mode === "required" && !em) {
+      setLandingError({ field: "email", text: "Please enter your email address so we can send you your report." });
+      emailRef.current?.focus();
+      return;
+    }
+    if (em && !EMAIL_RE.test(em)) {
+      setLandingError({ field: "email", text: "That email address does not look right." });
+      emailRef.current?.focus();
+      return;
+    }
     if (config?.memberCodeRequired && !accessCode.trim()) {
       setLandingError({ field: "code", text: "Please enter the access code from your invitation." });
       codeRef.current?.focus();
@@ -265,7 +282,7 @@ export function MemberApp() {
     setLandingError(null);
     if (accessCode.trim()) ssSet(SS_CODE, accessCode.trim());
     lsDel(LS_ID);
-    const m = { name: nm, role: rl };
+    const m: Member = { name: nm, role: rl, ...(em ? { email: em } : {}) };
     setMember(m);
     setAnswers({});
     setStartError(null);
@@ -286,7 +303,7 @@ export function MemberApp() {
     setStartError(null);
     try {
       const code = accessCode.trim() || undefined;
-      const { interviewId: id } = await api.startInterview({ name: member.name, role: member.role, answers: a, accessCode: code });
+      const { interviewId: id } = await api.startInterview({ name: member.name, role: member.role, answers: a, accessCode: code, ...(member.email ? { email: member.email } : {}) });
       lsSet(LS_ID, id);
       lsDel(LS_DRAFT);
       idRef.current = id;
@@ -608,6 +625,29 @@ export function MemberApp() {
               onChange={(e) => setRole(e.target.value)}
             />
           </label>
+          {config?.emailMode && config.emailMode !== "none" && (
+            <label className="field" htmlFor="f-email">
+              {config.emailMode === "required" ? "Email" : "Email (optional)"}
+              <input
+                ref={emailRef}
+                className="input"
+                id="f-email"
+                type="email"
+                autoComplete="email"
+                inputMode="email"
+                maxLength={200}
+                required={config.emailMode === "required"}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                aria-describedby="f-email-hint"
+              />
+              <span className="small" id="f-email-hint" style={{ fontWeight: 400 }}>
+                {config.emailSending
+                  ? "We use it only to send you your report. The organiser can see it, to follow up with you."
+                  : "So the organiser can follow up with you. The organiser can see it. Your report will also be on screen at the end, with a private link."}
+              </span>
+            </label>
+          )}
           {config?.memberCodeRequired && (
             <label className="field" htmlFor="f-code">
               Access code
@@ -827,73 +867,23 @@ export function MemberApp() {
   }
 
   if (screen === "feedback" && finish) {
-    const fb = finish.feedback;
+    const reportUrl = finish.reportToken && typeof window !== "undefined" ? window.location.origin + "/r/" + finish.reportToken : "";
     return (
       <div className="stack feedback" id="feedback">
-        <div className="stack-sm">
-          <p className="eyebrow">Your feedback</p>
-          <h1>{fb.headline}</h1>
-          <p className="lead">{fb.summary}</p>
-        </div>
-        {fb.strengths && fb.strengths.length > 0 && (
-          <section className="stack-sm">
-            <h2>What stood out</h2>
-            <ul className="clean">
-              {fb.strengths.map((s, i) => (
-                <li key={i}>{s}</li>
-              ))}
-            </ul>
-          </section>
-        )}
-        {fb.nextSteps && fb.nextSteps.length > 0 && (
-          <section className="stack-sm">
-            <h2>Next steps</h2>
-            <div className="steps">
-              {fb.nextSteps.map((s, i) => (
-                <div className="step" key={i}>
-                  <span className="num">{i + 1}</span>
-                  <div className="stack-sm" style={{ gap: "0.15rem" }}>
-                    <h3>{s.title}</h3>
-                    <p className="small">{s.detail}</p>
-                    {s.steps && s.steps.length > 0 && (
-                      <ul className="small step-list">
-                        {s.steps.map((t, j) => (
-                          <li key={j}>{t}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                </div>
-              ))}
+        <FeedbackView feedback={finish.feedback} ratings={finish.ratings} />
+        {reportUrl && (
+          <section className="card stack-sm" id="report-link">
+            <h2>Keep your report</h2>
+            <p className="small">
+              {finish.emailState === "sent" ? "We have also emailed it to you. " : ""}
+              This private link opens your report on any device. Anyone with the link can read it, so keep it to yourself.
+            </p>
+            <div className="row">
+              <input className="input" id="report-url" readOnly value={reportUrl} onFocus={(e) => e.currentTarget.select()} aria-label="Private link to your report" />
+              <button className="btn" type="button" id="btn-copy-report" onClick={() => void navigator.clipboard?.writeText(reportUrl).catch(() => {})}>
+                Copy link
+              </button>
             </div>
-          </section>
-        )}
-        {fb.calibration && (
-          <section className="stack-sm" id="fb-calibration">
-            <h2>Confidence and practice</h2>
-            <p>{fb.calibration}</p>
-          </section>
-        )}
-        {fb.followUp && (
-          <section className="stack-sm" id="fb-followup">
-            <h2>If you want to go further</h2>
-            <p>{fb.followUp}</p>
-          </section>
-        )}
-        {fb.closing && <p className="lead">{fb.closing}</p>}
-        {finish.ratings && finish.ratings.length > 0 && (
-          <section className="stack-sm">
-            <h2>Your confidence ratings</h2>
-            <table className="ratings">
-              <tbody>
-                {finish.ratings.map((it, i) => (
-                  <tr key={i}>
-                    <td>{it.task}</td>
-                    <td className="num">{typeof it.rating === "number" ? String(it.rating) : "skipped"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </section>
         )}
         <p className="small" id="save-status">

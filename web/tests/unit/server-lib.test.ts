@@ -71,20 +71,91 @@ test("memberResult never carries organiser-only coding", () => {
   assert.equal(r.ratings.length, SEED[0].confidence.items.length);
 });
 
-test("auth: HMAC cookie and constant-time compare", async () => {
-  process.env.ORGANISER_PASSCODE = "open sesame";
-  delete process.env.AUTH_SECRET;
+test("auth: personal passcodes, per-account cookies, revocation, owner-only guard", async () => {
+  const { NextRequest } = await import("next/server");
   const auth = await import("../../lib/auth");
-  const c1 = await auth.expectedCookie();
-  assert.match(c1, /^[0-9a-f]{64}$/);
-  assert.equal(await auth.passcodeMatches("open sesame"), true);
-  assert.equal(await auth.passcodeMatches("open sesamE"), false);
-  assert.equal(await auth.passcodeMatches(""), false);
-  process.env.AUTH_SECRET = "other";
-  assert.notEqual(await auth.expectedCookie(), c1);
+  const ACC = [{ id: "tim", name: "Tim", role: "owner", passcode: "owner-pass-1" }, { id: "suz", name: "Suzanne", role: "organiser", passcode: "org-pass-22" },
+    { id: "short", name: "X", role: "owner", passcode: "short" }, { id: "bad id!", name: "Y", role: "owner", passcode: "longenough" }];
+  process.env.ORGANISER_ACCOUNTS = JSON.stringify(ACC);
+  process.env.AUTH_SECRET = "secret-1";
+  // Short passcodes and invalid ids are ignored; roles other than owner become organiser.
+  assert.deepEqual(auth.accounts().map((a) => a.id), ["tim", "suz"]);
+  assert.deepEqual(await auth.accountForPasscode("org-pass-22"), { id: "suz", name: "Suzanne", role: "organiser" });
+  assert.equal(await auth.accountForPasscode("org-pass-2"), null);
+  assert.equal(await auth.accountForPasscode(""), null);
+  const req = (cookie: string) => new NextRequest("http://localhost/api/organiser/me", { headers: { cookie: "aiwd_org=" + cookie } });
+  const cTim = (await auth.cookieForId("tim"))!;
+  const cSuz = (await auth.cookieForId("suz"))!;
+  assert.match(cTim, /^tim\.[0-9a-f]{64}$/);
+  assert.equal((await auth.currentOrganiser(req(cTim)))?.role, "owner");
+  assert.equal((await auth.currentOrganiser(req(cSuz)))?.id, "suz");
+  assert.equal(await auth.currentOrganiser(req("tim." + cSuz.split(".")[1])), null, "a signature is bound to its account");
+  assert.equal((await auth.requireOrganiser(req(cSuz), { owner: true })).denied?.status, 403);
+  assert.ok((await auth.requireOrganiser(req(cTim), { owner: true })).organiser);
+  assert.equal((await auth.requireOrganiser(req("nope"))).denied?.status, 401);
+  // Changing a passcode revokes only that person's cookie; removing an account revokes it too.
+  process.env.ORGANISER_ACCOUNTS = JSON.stringify([ACC[0], { ...ACC[1], passcode: "new-org-pass" }]);
+  assert.equal(await auth.currentOrganiser(req(cSuz)), null);
+  assert.equal((await auth.currentOrganiser(req(cTim)))?.id, "tim");
+  process.env.ORGANISER_ACCOUNTS = JSON.stringify([ACC[1]]);
+  assert.equal(await auth.currentOrganiser(req(cTim)), null);
+  // A broken value means no accounts (closed in production), never open.
+  process.env.ORGANISER_ACCOUNTS = "{not json";
+  assert.deepEqual(auth.accounts(), []);
+  // Without ORGANISER_ACCOUNTS, ORGANISER_PASSCODE is one owner account (the original setup).
+  delete process.env.ORGANISER_ACCOUNTS;
+  process.env.ORGANISER_PASSCODE = "test";
+  assert.deepEqual(await auth.accountForPasscode("test"), { id: "owner", name: "Organiser", role: "owner" });
+  delete process.env.AUTH_SECRET;
   assert.equal(auth.safeEqual("abc", "abc"), true);
   assert.equal(auth.safeEqual("abc", "abd"), false);
   assert.equal(auth.safeEqual("abc", "abcd"), false);
+});
+
+test("pricing: per attempt, fallbacks at their own rate, cache writes by TTL, unknown models flagged", async () => {
+  const { priceUsage, voiceMicro } = await import("../../lib/pricing");
+  // 1M input + 1M output on Opus 5.5 = $4 + $20.
+  assert.equal(priceUsage("claude-opus-5-5", "claude-opus-5-5", { input_tokens: 1e6, output_tokens: 1e6 }).micro, 24e6);
+  // Cache: 1M read = $0.20; 1M written at 5 min = $5; 1M at 1 h = $8.
+  const cached = priceUsage("claude-opus-5-5", null, { input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 1e6, cache_creation_input_tokens: 2e6, cache_creation: { ephemeral_5m_input_tokens: 1e6, ephemeral_1h_input_tokens: 1e6 } });
+  assert.equal(cached.micro, (0.2 + 5 + 8) * 1e6);
+  assert.equal(cached.cacheWrite, 2e6);
+  // A refusal on Opus 5.5 then a fallback to Opus 4.8: each attempt at its own price.
+  const fb = priceUsage("claude-opus-5-5", "claude-opus-4-8", { input_tokens: 1e6, output_tokens: 0, iterations: [
+    { type: "message", model: "claude-opus-5-5", input_tokens: 1e6, output_tokens: 0 },
+    { type: "fallback_message", model: "claude-opus-4-8", input_tokens: 1e6, output_tokens: 1e6 },
+  ] });
+  assert.equal(fb.micro, (4 + 5 + 25) * 1e6);
+  assert.equal(fb.fallbacks, 1);
+  assert.equal(fb.estimated, false);
+  const unk = priceUsage("claude-opus-5-5", "claude-mystery-9", { input_tokens: 1e6, output_tokens: 0 });
+  assert.equal(unk.micro, 4e6);
+  assert.equal(unk.estimated, true);
+  // Voice: one hour at the default rate; very short clips count as 10 seconds.
+  delete process.env.GROQ_PRICE_PER_HOUR;
+  assert.equal(voiceMicro(3600), 111000);
+  assert.equal(voiceMicro(2), voiceMicro(10));
+  process.env.GROQ_PRICE_PER_HOUR = "0.04";
+  assert.equal(voiceMicro(3600), 40000);
+  delete process.env.GROQ_PRICE_PER_HOUR;
+});
+
+test("email: address check, escaped report email, not configured / mock", async () => {
+  const em = await import("../../lib/email");
+  assert.equal(em.isEmail("anneke@example.nl"), true);
+  for (const bad of ["anneke", "a@b", "a b@c.nl", "<x>@y.nl", "a@b.c"]) assert.equal(em.isEmail(bad), false, bad);
+  const fb = { headline: "Thanks <b>Ann</b>", summary: "S & more", strengths: ["one"], nextSteps: [{ title: "T", detail: "D", steps: ["s1", "s2"] }], calibration: "C", followUp: "F", closing: "Bye" };
+  const m = em.reportEmail("Ann<script>", fb, "https://x.example/r/r_abc");
+  assert.ok(!m.html.includes("<script>") && !m.html.includes("<b>Ann</b>"));
+  assert.ok(m.html.includes("&lt;b&gt;Ann&lt;/b&gt;") && m.html.includes("S &amp; more"));
+  assert.ok(m.text.includes("  - s2") && m.text.includes("https://x.example/r/r_abc") && m.text.includes("If you want to go further: F"));
+  delete process.env.RESEND_API_KEY; delete process.env.EMAIL_FROM; delete process.env.EMAIL_MOCK;
+  assert.equal(em.emailConfigured(), false);
+  assert.equal(await em.sendReport("a@b.nl", "A", fb, "u"), "not_configured");
+  process.env.EMAIL_MOCK = "1";
+  assert.equal(await em.sendReport("a@b.nl", "A", fb, "u"), "sent");
+  assert.equal(em.mockOutbox.at(-1)!.to, "a@b.nl");
+  delete process.env.EMAIL_MOCK;
 });
 
 test("memory store: lock NX, rate limit, slots, profiles newest first", async () => {
@@ -127,4 +198,58 @@ test("mock LLM: scenarios from the member name", async () => {
   iv.answer("busy week");
   const r2 = await iv.next();
   assert.deepEqual(r2.chips, ["This week", "This month", "Longer ago"]);
+});
+
+test("memory store: settings, report links, activity log, cost counters", async () => {
+  const s = await import("../../lib/store");
+  assert.deepEqual(await s.getSettings(), { emailMode: "none" });
+  await s.saveSettings({ emailMode: "optional" });
+  assert.equal((await s.getSettings()).emailMode, "optional");
+  await s.saveSettings({ emailMode: "none" });
+  const p = { ...SEED[0], id: "p_report_test" } as any;
+  await s.saveProfile(p);
+  const tok = s.newReportToken();
+  assert.equal(s.isReportToken(tok), true);
+  await s.saveReportToken(tok, p.id);
+  assert.equal((await s.profileForReport(tok))?.id, p.id);
+  assert.equal(await s.profileForReport("r_" + "f".repeat(32)), null);
+  assert.equal(await s.profileForReport("../etc"), null);
+  await s.deleteProfile(p.id);
+  assert.equal(await s.profileForReport(tok), null);
+  await s.audit({ id: "a", name: "A" }, "first");
+  await new Promise((r) => setTimeout(r, 5));
+  await s.audit({ id: "b", name: "B" }, "second", "x".repeat(300));
+  const log = await s.listAudit(2);
+  assert.deepEqual(log.map((e) => e.action), ["second", "first"]);
+  assert.equal(log[0].detail!.length, 200);
+  const iv = s.newInterviewId();
+  const before = await s.costTotals();
+  await s.recordCost("turn", { micro: 100, calls: 1, input: 10, output: 5 }, iv);
+  await s.recordCost("voice", { micro: 7, calls: 1, seconds: 12 }, iv);
+  const after = await s.costTotals();
+  assert.equal((after["turn.micro"] || 0) - (before["turn.micro"] || 0), 100);
+  assert.equal((after["voice.seconds"] || 0) - (before["voice.seconds"] || 0), 12);
+  const ivs = await s.costInterviews();
+  assert.equal(ivs[0].id, iv);
+  assert.deepEqual(ivs[0].counters, { "turn.micro": 100, "turn.calls": 1, "turn.input": 10, "turn.output": 5, "voice.micro": 7, "voice.calls": 1, "voice.seconds": 12 });
+  const days = await s.costDays(3);
+  assert.equal(days.length, 3);
+  assert.equal(days[2].date, new Date().toISOString().slice(0, 10));
+});
+
+test("getLlm({kind, interviewId}) records each call's cost, including refusals", async () => {
+  process.env.AIWD_MOCK_LLM = "1";
+  const { getLlm } = await import("../../lib/llm");
+  const s = await import("../../lib/store");
+  const iv = s.newInterviewId();
+  const llm = getLlm({ kind: "turn", interviewId: iv });
+  await llm.chat("The person you are talking to is Anna, who described", [{ role: "user", content: "[The interview begins now.]" }], { tier: "interview" });
+  await assert.rejects(llm.chat("The person you are talking to is Refuse Rita, who described", [{ role: "user", content: "x" }], { tier: "interview" }));
+  const mine = (await s.costInterviews()).find((r) => r.id === iv)!;
+  assert.equal(mine.counters["turn.calls"], 1, "the mock's refusal carries no usage; a real refusal does");
+  assert.equal(mine.counters["turn.micro"], 8000);
+  // Untracked calls record nothing.
+  const before = JSON.stringify(await s.costTotals());
+  await getLlm().chat("The person you are talking to is Anna, who described", [{ role: "user", content: "x" }], { tier: "interview" });
+  assert.equal(JSON.stringify(await s.costTotals()), before);
 });

@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { isProfileLike, parseCodes } from "@/lib/aiwd/codes";
 import { requireOrganiser } from "@/lib/auth";
 import { errorResponse, jsonError, noStore, readJson } from "@/lib/http";
-import { saveProfile } from "@/lib/store";
+import { audit, saveProfile } from "@/lib/store";
 import type { Profile } from "@/lib/aiwd/types";
 import { sanitiseImported } from "@/lib/validate";
 
@@ -10,8 +10,8 @@ export const runtime = "nodejs";
 
 /** POST {text} → {imported, skipped}. Accepts artifact result codes (AIWD1:+base64, or JSON). */
 export async function POST(req: NextRequest) {
-  const denied = await requireOrganiser(req);
-  if (denied) return denied;
+  const auth = await requireOrganiser(req);
+  if (auth.denied) return auth.denied;
   try {
     const body = await readJson(req, 4_000_000);
     if (typeof body.text !== "string" || !body.text.trim()) return jsonError(400, "Paste one or more result codes.", "invalid");
@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
       await saveProfile(p);
       imported++;
     }
+    if (imported) await audit(auth.organiser, "imported results", String(imported));
     return noStore({ imported, skipped });
   } catch (err) {
     return errorResponse(err);

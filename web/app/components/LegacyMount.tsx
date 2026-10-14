@@ -131,6 +131,24 @@ const Store = {
       }),
     );
   },
+  async me() {
+    return json<{ id: string; name: string; role: "owner" | "organiser" }>(await fetch("/api/organiser/me", { cache: "no-store" }));
+  },
+  async getSettings() {
+    return json<{ emailMode: string; emailSending: boolean }>(await fetch("/api/organiser/settings", { cache: "no-store" }));
+  },
+  async saveSettings(settings: { emailMode: string }) {
+    return json<{ emailMode: string; emailSending: boolean }>(
+      await fetch("/api/organiser/settings", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(settings) }),
+    );
+  },
+  async costs() {
+    return json<unknown>(await fetch("/api/organiser/costs", { cache: "no-store" }));
+  },
+  async activity() {
+    const j = await json<{ entries: unknown[] }>(await fetch("/api/organiser/audit", { cache: "no-store" }));
+    return Array.isArray(j.entries) ? j.entries : [];
+  },
   async saveShareback(result: unknown) {
     return json<unknown>(
       await fetch("/api/organiser/generate", {

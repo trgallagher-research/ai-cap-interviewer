@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { transcribe, transcriptionEnabled } from "@/lib/groq";
 import { clientIp, isInterviewId } from "@/lib/http";
-import { getInterview, withinLimit } from "@/lib/store";
+import { voiceMicro } from "@/lib/pricing";
+import { getInterview, recordCost, withinLimit } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -46,7 +47,8 @@ export async function POST(req: NextRequest) {
 
   const filename = file instanceof File && file.name ? file.name : `audio.${file.type.includes("mp4") ? "mp4" : "webm"}`;
   try {
-    const text = await transcribe(file, filename);
+    const { text, seconds } = await transcribe(file, filename);
+    await recordCost("voice", { micro: voiceMicro(seconds), calls: 1, seconds: Math.round(seconds) }, interviewId as string).catch((e) => console.error("cost record failed", e));
     return NextResponse.json({ text });
   } catch (err) {
     console.error(err);

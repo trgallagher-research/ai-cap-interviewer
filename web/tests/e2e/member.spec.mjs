@@ -229,6 +229,10 @@ async function fullFlow(browser, page, tag, name, opts = {}) {
   check("advice has 2 pieces with concrete steps (" + tag + ")", (await page.locator("#feedback .step").count()) === 2 && (await page.locator("#feedback .step-list li").count()) === 5);
   check("calibration and follow-up shown (" + tag + ")", (await page.isVisible("#fb-calibration")) && (await page.isVisible("#fb-followup")) && fbText.includes("If you want to go further"));
   check("feedback never shows the skill index (" + tag + ")", !/skill index|skillIndex/i.test(fbText));
+  const reportUrl = await page.inputValue("#report-url");
+  check("private report link shown (" + tag + ")", /\/r\/r_[0-9a-f]{32}$/.test(reportUrl), reportUrl);
+  const rp = await page.request.get(reportUrl);
+  check("report link opens the same feedback (" + tag + ")", rp.status() === 200 && (await rp.text()).includes(`Thanks ${name}, here is what stood out`));
   check("feedback shows no level, score or divergence (" + tag + ")", !/Routine|Integrated|Exploring|divergence|aligned|level \d|practice level|\/ 100|average/i.test(fbText), fbText.slice(0, 300));
   check("confidence ratings listed (" + tag + ")", fbText.includes("Your confidence ratings") && fbText.includes("skipped") && fbText.includes("90"));
   check("saved line and no result code (" + tag + ")", fbText.includes("Your answers have been saved for the organiser.") && !/result code|AIWD1:/i.test(fbText) && (await page.locator("#result-code").count()) === 0);
@@ -489,6 +493,47 @@ async function patchNextChips(page, chips) {
       const st = await page.evaluate(async () => (await fetch("/api/interview/state?id=" + localStorage.getItem("aiwd.interviewId"))).json());
       check("server got the answers without skipped questions", st.answers && st.answers.frequency === "never" && !("uses" in st.answers), JSON.stringify(st.answers));
       await ctx.close();
+    }
+    // 7d. Email field follows the organiser's setting (required → optional → none), then reset
+    {
+      const ctx0 = await browser.newContext();
+      await ctx0.request.post(BASE + "/api/organiser/login", { data: { passcode: PASSCODE } });
+      const setMode = (m) => ctx0.request.put(BASE + "/api/organiser/settings", { data: { emailMode: m } });
+      try {
+        await setMode("required");
+        const { ctx, page } = await newPage(browser);
+        await page.waitForSelector("#f-email");
+        check("email field shown and required when the organiser requires it", (await page.textContent("label[for='f-email']")).startsWith("Email") && !(await page.textContent("label[for='f-email']")).includes("optional"));
+        await page.fill("#f-name", "Emma" + RUN);
+        await page.fill("#f-role", "coach");
+        await page.click("#btn-start");
+        check("missing email blocks the start", (await page.isVisible("#f-error")) && (await page.textContent("#f-error")).includes("email") && (await page.locator("#questionnaire").count()) === 0);
+        await page.fill("#f-email", "not an email");
+        await page.click("#btn-start");
+        check("bad email blocks the start", (await page.textContent("#f-error")).includes("does not look right"));
+        await page.fill("#f-email", "emma@example.org");
+        await page.click("#btn-start");
+        await page.waitForSelector("#questionnaire");
+        await fillQuestionnaire(page, "never");
+        await page.click("#btn-q-continue");
+        await page.waitForSelector("#interview");
+        await waitIdle(page);
+        await ctx.close();
+        await setMode("optional");
+        const b = await newPage(browser);
+        await b.page.waitForSelector("#f-email");
+        check("email marked optional when optional", (await b.page.textContent("label[for='f-email']")).includes("optional"));
+        await b.ctx.close();
+        await setMode("none");
+        const c2 = await newPage(browser);
+        await c2.page.waitForSelector("#f-name");
+        await c2.page.waitForTimeout(300);
+        check("no email field when not collected", (await c2.page.locator("#f-email").count()) === 0);
+        await c2.ctx.close();
+      } finally {
+        await setMode("none");
+        await ctx0.close();
+      }
     }
     // 8. Open chip only focuses the box; typed text wins over a tap
     {

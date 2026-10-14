@@ -7,7 +7,7 @@ import { requireOrganiser } from "@/lib/auth";
 import { errorResponse, jsonError, noStore, readJson } from "@/lib/http";
 import { getLlm } from "@/lib/llm";
 import {
-  acquireGenerateLock, getGenerated, listProfiles, releaseGenerateLock, setGenerated, type GenerateKind,
+  audit, acquireGenerateLock, getGenerated, listProfiles, releaseGenerateLock, setGenerated, type GenerateKind,
 } from "@/lib/store";
 
 export const runtime = "nodejs";
@@ -20,8 +20,8 @@ function kindOf(v: unknown): GenerateKind | null {
 
 /** GET ?kind=product-read|shareback → cached {n, samples, at, result} or {result: null}. */
 export async function GET(req: NextRequest) {
-  const denied = await requireOrganiser(req);
-  if (denied) return denied;
+  const auth = await requireOrganiser(req);
+  if (auth.denied) return auth.denied;
   try {
     const kind = kindOf(req.nextUrl.searchParams.get("kind"));
     if (!kind) return jsonError(400, "kind must be product-read or shareback", "invalid");
@@ -48,8 +48,8 @@ async function profilesFor(includeSamples: boolean): Promise<{ profiles: Profile
 
 /** POST {kind, includeSamples} → builds the prompt server-side, returns and caches {n, samples, at, result}. */
 export async function POST(req: NextRequest) {
-  const denied = await requireOrganiser(req);
-  if (denied) return denied;
+  const auth = await requireOrganiser(req);
+  if (auth.denied) return auth.denied;
   try {
     const body = await readJson(req, 4000);
     const kind = kindOf(body.kind);
@@ -61,7 +61,8 @@ export async function POST(req: NextRequest) {
     try {
       const st = stats(profiles);
       const prompt = kind === "product-read" ? buildProductReadPrompt(profiles, st) : buildSharebackPrompt(profiles, st);
-      const result = await chatJson(getLlm(), [{ role: "user", content: prompt }], { tier: "reasoning" });
+      const result = await chatJson(getLlm({ kind }), [{ role: "user", content: prompt }], { tier: "reasoning" });
+      await audit(auth.organiser, kind === "product-read" ? "generated the product read" : "generated the share-back", `${profiles.length} profiles`);
       const value = { n: profiles.length, samples, at: new Date().toISOString(), result };
       await setGenerated(kind, value);
       return noStore(value);
@@ -75,8 +76,8 @@ export async function POST(req: NextRequest) {
 
 /** PUT {kind:"shareback", result} → saves the organiser's edits to the share-back. */
 export async function PUT(req: NextRequest) {
-  const denied = await requireOrganiser(req);
-  if (denied) return denied;
+  const auth = await requireOrganiser(req);
+  if (auth.denied) return auth.denied;
   try {
     const body = await readJson(req, 200_000);
     if (body.kind !== "shareback") return jsonError(400, "Only the share-back can be edited.", "invalid");
@@ -85,6 +86,7 @@ export async function PUT(req: NextRequest) {
     const prev = await getGenerated("shareback");
     const value = { n: prev ? prev.n : 0, samples: prev ? prev.samples : 0, at: new Date().toISOString(), result, edited: true };
     await setGenerated("shareback", value);
+    await audit(auth.organiser, "edited the share-back");
     return noStore(value);
   } catch (err) {
     return errorResponse(err);

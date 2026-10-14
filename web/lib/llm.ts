@@ -8,11 +8,16 @@
  * stop_reason "refusal" checked before the text is used. No `thinking` param: it is always on for
  * claude-opus-5-5, and {type:"disabled"} or a budget would be rejected.
  *
+ * getLlm({kind, interviewId}) also records each call's priced usage (lib/pricing.ts) in the cost
+ * counters, including refused and failed-after-output attempts, so the owner sees what was spent.
+ *
  * AIWD_MOCK_LLM=1 swaps in a scripted mock (same scenarios as prototype/tests/member.spec.js);
  * the scenario is read from the member name (see mockScenario()).
  */
 import Anthropic from "@anthropic-ai/sdk";
 import type { ChatMessage, Llm, LlmTier } from "./aiwd/types";
+import { priceUsage, type PricedUsage } from "./pricing";
+import { recordCost, type CostKind } from "./store";
 
 export const MODELS = {
   interview: process.env.MODEL_INTERVIEW || "claude-opus-5-5",
@@ -24,6 +29,8 @@ export type LlmErrorCode = "rate_limited" | "overloaded" | "refusal" | "failed" 
 export class LlmError extends Error {
   code: LlmErrorCode;
   status: number;
+  /** Priced usage of a call that was billed but failed (e.g. a refusal after output). */
+  usage?: PricedUsage;
   constructor(message: string, code: LlmErrorCode, status = 502) {
     super(message);
     this.code = code;
@@ -103,14 +110,17 @@ const anthropicLlm: Llm = {
         }
       }
       const final = await stream.finalMessage();
+      const usage = priceUsage(params.model, final.model, final.usage as Parameters<typeof priceUsage>[2]);
       // Check the stop reason before using the text: a refusal's partial output is discarded.
       if (final.stop_reason === "refusal") {
-        throw new LlmError("Claude declined to answer this one. Please rephrase your last answer, or stop here.", "refusal", 422);
+        const e = new LlmError("Claude declined to answer this one. Please rephrase your last answer, or stop here.", "refusal", 422);
+        e.usage = usage;
+        throw e;
       }
       const text = final.content
         .map((b) => (b.type === "text" ? b.text : ""))
         .join("");
-      return { text: text || full };
+      return { text: text || full, usage };
     } catch (err) {
       throw toLlmError(err);
     }
@@ -238,7 +248,9 @@ const mockLlm: Llm = {
       for (let i = 7; i < text.length; i += 7) { opts.onText(text.slice(0, i)); await new Promise((r) => setTimeout(r, delay)); }
       opts.onText(text);
     }
-    return { text };
+    // Fixed usage per call so cost tracking is testable: 1000 input + 200 output tokens on Opus 5.5
+    // = $0.004 + $0.004 = 8000 micro-dollars.
+    return { text, usage: priceUsage(MODELS.interview, "claude-opus-5-5", { input_tokens: 1000, output_tokens: 200 }) };
   },
 };
 
@@ -248,6 +260,31 @@ export function isMockLlm(): boolean {
   return process.env.AIWD_MOCK_LLM === "1";
 }
 
-export function getLlm(): Llm {
-  return isMockLlm() ? mockLlm : anthropicLlm;
+/** What a call is for, so its cost lands on the right counters. */
+export interface CostTrack { kind: CostKind; interviewId?: string }
+
+async function track(t: CostTrack, u: PricedUsage | undefined): Promise<void> {
+  if (!u) return;
+  try {
+    await recordCost(t.kind, { micro: u.micro, calls: 1, input: u.input, output: u.output, cacheRead: u.cacheRead, cacheWrite: u.cacheWrite, fallbacks: u.fallbacks }, t.interviewId);
+  } catch (err) {
+    console.error("cost record failed", err); // never fail the member's request over bookkeeping
+  }
+}
+
+export function getLlm(t?: CostTrack): Llm {
+  const base = isMockLlm() ? mockLlm : anthropicLlm;
+  if (!t) return base;
+  return {
+    async chat(system, messages, opts) {
+      try {
+        const r = await base.chat(system, messages, opts);
+        await track(t, r.usage as PricedUsage | undefined);
+        return r;
+      } catch (err) {
+        await track(t, (err as LlmError).usage);
+        throw err;
+      }
+    },
+  };
 }

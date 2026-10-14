@@ -3,14 +3,22 @@ import { assembleProfile, chatJson, Interview, profileMessages } from "@/lib/aiw
 import { errorResponse, isInterviewId, jsonError, noStore, readJson } from "@/lib/http";
 import { getLlm } from "@/lib/llm";
 import { memberResult } from "@/lib/member";
-import { acquireLock, getInterview, releaseLock, saveInterview, saveProfile, withinLimit } from "@/lib/store";
+import { sendReport } from "@/lib/email";
+import { acquireLock, getInterview, getSettings, newReportToken, releaseLock, saveInterview, saveProfile, saveReportToken, withinLimit } from "@/lib/store";
+
+/** Absolute base for links in emails: PUBLIC_BASE_URL, else the request's own origin. */
+function baseUrl(req: NextRequest): string {
+  return (process.env.PUBLIC_BASE_URL || req.nextUrl.origin).replace(/\/+$/, "");
+}
 
 export const runtime = "nodejs";
 export const maxDuration = 300; // profile and generation calls can exceed 60 s; allowed with Vercel Fluid compute (default for new projects)
 
 /**
  * POST {interviewId} → {feedback, ratings:[{task, rating|null}], endedEarly}.
- * Builds and stores the full Profile (organiser-only) and returns only the member-safe subset.
+ * Builds and stores the full Profile (organiser-only) and returns only the member-safe subset,
+ * plus the private report link token. Emails the report when the member gave an address, the
+ * organiser's setting collects emails, and sending is configured.
  * Idempotent: a second call returns the stored result without another model call.
  */
 export async function POST(req: NextRequest) {
@@ -34,10 +42,19 @@ export async function POST(req: NextRequest) {
       rec = await getInterview(id);
       if (!rec) return jsonError(404, "Interview not found", "not_found");
       if (rec.result) return noStore(rec.result);
-      const iv = Interview.fromJSON(rec.state, getLlm());
+      const iv = Interview.fromJSON(rec.state, getLlm({ kind: "profile", interviewId: id }));
       const out = await chatJson(iv.llm, profileMessages(iv), { tier: "reasoning" });
       const profile = assembleProfile(iv, out, "live");
+      profile.interviewId = id;
+      profile.reportToken = newReportToken();
+      if (rec.email) profile.member.email = rec.email;
       await saveProfile(profile);
+      await saveReportToken(profile.reportToken, profile.id);
+      if (rec.email && (await getSettings()).emailMode !== "none") {
+        const state = await sendReport(rec.email, profile.member.name, profile.feedback, baseUrl(req) + "/r/" + profile.reportToken);
+        profile.emailStatus = { state, at: new Date().toISOString() };
+        await saveProfile(profile);
+      }
       rec.profileId = profile.id;
       rec.result = memberResult(profile);
       await saveInterview(rec);
