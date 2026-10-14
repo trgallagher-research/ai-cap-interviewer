@@ -8,7 +8,8 @@
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "test:unit": "tsx --test tests/unit/*.test.ts",
-    "test:e2e": "node tests/e2e/run.mjs"
+    "test:e2e": "node tests/e2e/run.mjs",
+    "gen:seed": "node scripts/gen-seed.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",

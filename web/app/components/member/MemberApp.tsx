@@ -83,6 +83,10 @@ function errorMessage(e: unknown): { message: string; label: string } {
       return { message: "This pilot has reached its maximum number of interviews. Please let the organiser know.", label: "Try again" };
     case "access_code":
       return { message: "That access code was not accepted. Check the code in your invitation and try again.", label: "Try again" };
+    case "refusal":
+      return { message: err.message || "Claude declined to answer this one. Please rephrase your last answer, or stop here.", label: "Try again" };
+    case "limit":
+      return { message: "This interview has reached its length limit. Please choose \u201cI'd like to stop here\u201d below to get your feedback.", label: "Try again" };
     case "failed":
       return { message: "Something went wrong while Claude was answering. Your answer is saved; try again.", label: "Retry" };
     default:
@@ -192,10 +196,8 @@ export function MemberApp() {
 
   // Keep the newest message in view.
   useEffect(() => {
-    const ch = chatRef.current;
-    const last = ch && (ch.parentElement?.querySelector("#composer")?.previousElementSibling || ch.lastElementChild);
-    if (ch && ch.lastElementChild && ch.lastElementChild.scrollIntoView) ch.lastElementChild.scrollIntoView({ block: "end", behavior: "auto" });
-    void last;
+    const last = chatRef.current?.lastElementChild;
+    if (last && last.scrollIntoView) last.scrollIntoView({ block: "end", behavior: "auto" });
   }, [turns.length, streaming, chips, rateItems, turnError]);
 
   // Focus the answer box whenever it becomes usable again.
@@ -341,14 +343,15 @@ export function MemberApp() {
       setStreaming(null);
       setBusy(false);
       const err = e as api.ApiError;
-      if (err.code === "nothing_to_answer") {
+      if (err.code === "nothing_to_answer" || err.code === "finished" || err.code === "awaiting_ratings" || err.code === "not_rating") {
         await resync();
         return;
       }
-      setTurnError(errorMessage(err));
+      // During a turn, a rate limit is Claude's, not the per-connection start limit.
+      setTurnError(errorMessage(err.code === "rate_limited" ? Object.assign(err, { code: "overloaded" }) : err));
       return;
     }
-    const text = visible(streamRef.current);
+    const text = visible(typeof done.text === "string" && done.text ? done.text : streamRef.current);
     streamRef.current = "";
     lastEndNowRef.current = false;
     if (text) setTurns((p) => [...p, { role: "interviewer", text }]);
@@ -380,11 +383,15 @@ export function MemberApp() {
     const id = idRef.current;
     if (!id) return;
     let st: api.InterviewStateResponse;
+    setBusy(true); // the composer stays locked while the page catches up with the server
     try {
       st = await api.getState(id);
     } catch (e) {
+      setBusy(false);
       setTurnError(errorMessage(e));
       return;
+    } finally {
+      if (!busyRef.current) setBusy(false);
     }
     // An answer the server never recorded (e.g. a "busy" refusal) goes back into the box.
     const lastLocal = [...turnsRef.current].reverse().find((t) => t.role === "member" && !t.ratings);
@@ -782,25 +789,6 @@ export function MemberApp() {
             )}
           </div>
         </div>
-        {rating && (
-          <div id="stop-wrap-rating" className="small">
-            {stopConfirm ? (
-              <span className="row" id="stop-confirm">
-                <span>Stop now? Your feedback will be based on what you have shared so far.</span>
-                <button className="btn" type="button" id="btn-stop-yes" onClick={confirmStop} disabled={busy}>
-                  Yes, stop here
-                </button>
-                <button className="btn quiet" type="button" id="btn-stop-no" onClick={() => setStopConfirm(false)}>
-                  Keep going
-                </button>
-              </span>
-            ) : (
-              <button className="linkbtn" id="btn-stop" type="button" disabled={busy} onClick={() => setStopConfirm(true)}>
-                I&apos;d like to stop here
-              </button>
-            )}
-          </div>
-        )}
       </div>
     );
   }

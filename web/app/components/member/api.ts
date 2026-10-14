@@ -3,7 +3,7 @@
 export interface RateItem {
   id: string;
   task: string;
-  level: number;
+  level?: number;
   beyond?: number;
 }
 
@@ -50,6 +50,8 @@ export interface TurnDone {
   rateItems: RateItem[] | null;
   chips: string[] | null;
   complete: boolean;
+  /** The final visible message (the stream may stop early when the engine retries). */
+  text?: string;
 }
 
 export class ApiError extends Error {

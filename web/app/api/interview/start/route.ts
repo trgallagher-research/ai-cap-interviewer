@@ -1,0 +1,41 @@
+import type { NextRequest } from "next/server";
+import { Interview } from "@/lib/aiwd/engine";
+import { safeEqual } from "@/lib/auth";
+import { clientIp, errorResponse, jsonError, noStore, readJson } from "@/lib/http";
+import { allowStart, newInterviewId, reserveInterviewSlot, saveInterview } from "@/lib/store";
+import { cleanText, LIMITS_INPUT, validateAnswers } from "@/lib/validate";
+
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+/** POST {name, role, answers, accessCode?} → {interviewId}. No model call here. */
+export async function POST(req: NextRequest) {
+  try {
+    const body = await readJson(req);
+    const name = cleanText(body.name, "name", LIMITS_INPUT.name, true);
+    const role = cleanText(body.role, "role", LIMITS_INPUT.role, true);
+    const answers = validateAnswers(body.answers);
+
+    const required = process.env.MEMBER_ACCESS_CODE || "";
+    if (required) {
+      const got = typeof body.accessCode === "string" ? body.accessCode.trim().slice(0, LIMITS_INPUT.accessCode) : "";
+      if (!got || !safeEqual(got.toLowerCase(), required.trim().toLowerCase())) {
+        return jsonError(403, "That access code is not right. Check the invite link or ask the organiser.", "access_code");
+      }
+    }
+    if (!(await allowStart(clientIp(req)))) {
+      return jsonError(429, "Too many interviews started from this connection. Please try again in an hour.", "rate_limited");
+    }
+    if (!(await reserveInterviewSlot())) {
+      return jsonError(503, "The pilot is full: the maximum number of interviews has been reached. Thank you for your interest.", "full");
+    }
+
+    const iv = new Interview({ name, role }, answers);
+    const now = new Date().toISOString();
+    const id = newInterviewId();
+    await saveInterview({ id, state: iv.toJSON(), createdAt: now, updatedAt: now });
+    return noStore({ interviewId: id });
+  } catch (err) {
+    return errorResponse(err);
+  }
+}

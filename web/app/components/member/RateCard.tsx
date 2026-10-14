@@ -16,7 +16,7 @@ export function RateCard({ items, disabled, onSubmit }: Props) {
     () =>
       items
         .map((it, i) => ({ it, i }))
-        .sort((a, b) => a.it.level - b.it.level || a.i - b.i)
+        .sort((a, b) => (a.it.level ?? 0) - (b.it.level ?? 0) || a.i - b.i)
         .map((x) => x.it),
     [items],
   );
