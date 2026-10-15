@@ -32,7 +32,8 @@ const STRIP = ["KV_REST_API_URL", "KV_REST_API_TOKEN", "UPSTASH_REDIS_REST_URL",
 function baseEnv(extra = {}) {
   const env = { ...process.env };
   for (const k of STRIP) delete env[k];
-  Object.assign(env, { AIWD_MOCK_LLM: "1", ORGANISER_PASSCODE: "test", NEXT_DIST_DIR: DIST, NEXT_TELEMETRY_DISABLED: "1" });
+  // DEFAULT_LANG=en keeps the existing English checks; the Dutch default is tested with ?lang=nl.
+  Object.assign(env, { AIWD_MOCK_LLM: "1", ORGANISER_PASSCODE: "test", DEFAULT_LANG: "en", NEXT_DIST_DIR: DIST, NEXT_TELEMETRY_DISABLED: "1" });
   for (const [k, v] of Object.entries(extra)) { if (v === null || v === undefined) delete env[k]; else env[k] = String(v); }
   return env;
 }

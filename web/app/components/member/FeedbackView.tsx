@@ -1,18 +1,20 @@
 /* The member's report: feedback sections and their confidence ratings. No hooks, so it renders
  * both inside the member app and on the server-rendered private report page (/r/<token>). */
 import type { Feedback } from "./api";
+import { STRINGS, type Lang } from "./i18n";
 
-export function FeedbackView({ feedback: fb, ratings }: { feedback: Feedback; ratings: { task: string; rating: number | null }[] }) {
+export function FeedbackView({ feedback: fb, ratings, lang = "en" }: { feedback: Feedback; ratings: { task: string; rating: number | null }[]; lang?: Lang }) {
+  const t = STRINGS[lang];
   return (
     <>
       <div className="stack-sm">
-        <p className="eyebrow">Your feedback</p>
+        <p className="eyebrow">{t.yourFeedback}</p>
         <h1>{fb.headline}</h1>
         <p className="lead">{fb.summary}</p>
       </div>
       {fb.strengths && fb.strengths.length > 0 && (
         <section className="stack-sm">
-          <h2>What stood out</h2>
+          <h2>{t.stoodOut}</h2>
           <ul className="clean">
             {fb.strengths.map((s, i) => (
               <li key={i}>{s}</li>
@@ -22,7 +24,7 @@ export function FeedbackView({ feedback: fb, ratings }: { feedback: Feedback; ra
       )}
       {fb.nextSteps && fb.nextSteps.length > 0 && (
         <section className="stack-sm">
-          <h2>Next steps</h2>
+          <h2>{t.nextSteps}</h2>
           <div className="steps">
             {fb.nextSteps.map((s, i) => (
               <div className="step" key={i}>
@@ -45,26 +47,26 @@ export function FeedbackView({ feedback: fb, ratings }: { feedback: Feedback; ra
       )}
       {fb.calibration && (
         <section className="stack-sm" id="fb-calibration">
-          <h2>Confidence and practice</h2>
+          <h2>{t.calibration}</h2>
           <p>{fb.calibration}</p>
         </section>
       )}
       {fb.followUp && (
         <section className="stack-sm" id="fb-followup">
-          <h2>If you want to go further</h2>
+          <h2>{t.followUp}</h2>
           <p>{fb.followUp}</p>
         </section>
       )}
       {fb.closing && <p className="lead">{fb.closing}</p>}
       {ratings && ratings.length > 0 && (
         <section className="stack-sm">
-          <h2>Your confidence ratings</h2>
+          <h2>{t.yourRatings}</h2>
           <table className="ratings">
             <tbody>
               {ratings.map((it, i) => (
                 <tr key={i}>
                   <td>{it.task}</td>
-                  <td className="num">{typeof it.rating === "number" ? String(it.rating) : "skipped"}</td>
+                  <td className="num">{typeof it.rating === "number" ? String(it.rating) : t.skipped}</td>
                 </tr>
               ))}
             </tbody>

@@ -9,7 +9,8 @@ import { cleanText, LIMITS_INPUT, validateAnswers } from "@/lib/validate";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-/** POST {name, role, email?, answers, accessCode?} → {interviewId}. No model call here.
+/** POST {name, role, email?, lang?, answers, accessCode?} → {interviewId}. No model call here.
+ *  lang "nl" runs the interview and feedback in Dutch; anything else is English.
  *  Email follows the organiser's setting: required, optional, or not collected (ignored). */
 export async function POST(req: NextRequest) {
   try {
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
     }
 
     const iv = new Interview({ name, role }, answers);
+    if (body.lang === "nl") iv.lang = "nl";
     const now = new Date().toISOString();
     const id = newInterviewId();
     await saveInterview({ id, state: iv.toJSON(), createdAt: now, updatedAt: now, ...(email ? { email } : {}) });

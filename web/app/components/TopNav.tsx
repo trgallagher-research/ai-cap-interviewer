@@ -31,7 +31,7 @@ export function TopNav() {
     <nav className="topnav" aria-label="Main">
       <div className="topnav-inner">
         <Link className="wordmark" href={isOrganiser ? "/organiser" : "/"}>
-          AI at Work Diagnostic <span>· Systeeminterventies</span>
+          AI at Work Diagnostic <span>· Makersnetwerk</span>
         </Link>
         {isOrganiser && (
           <div className="navlinks" id="navlinks">

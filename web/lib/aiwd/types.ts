@@ -7,6 +7,8 @@ export type Phase = "orient" | "practice" | "stretch" | "rate" | "close";
 export type DivergenceKind = "aligned" | "confident-starter" | "cautious-practitioner" | "unrated";
 export type Band = "low" | "moderate" | "high" | "none";
 export type InterviewStatus = "in_progress" | "rating" | "complete" | "ended_early";
+/** The member's language. "en" when absent (records from before the Dutch version). */
+export type Lang = "nl" | "en";
 export type ProfileSource = "seed" | "live" | "imported";
 
 /** Opening questionnaire answers. Skipped questions are absent. */
@@ -75,6 +77,8 @@ export interface InterviewState {
   rateRetries: number;
   forcedRateAttempts: number;
   startedAt: string;
+  /** Only stored when not English. */
+  lang?: Lang;
 }
 
 export interface QuestionOption {
@@ -208,6 +212,8 @@ export interface Profile {
   reportToken?: string;
   /** Whether the report was emailed. */
   emailStatus?: { state: string; at: string };
+  /** The member's language (feedback, report page, email); absent = English. */
+  lang?: Lang;
   practice: {
     level: number;
     levelLabel: string;

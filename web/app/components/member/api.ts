@@ -27,9 +27,12 @@ export interface AppConfig {
   repliesToContact?: boolean;
   /** Days before survey data is deleted. */
   retentionDays?: number;
+  /** Language the start page opens in when the member has not chosen one. */
+  defaultLang?: "nl" | "en";
 }
 
 export interface InterviewStateResponse {
+  lang?: "nl" | "en";
   member: { name: string; role: string };
   answers: Record<string, unknown>;
   turns: Turn[];
@@ -95,6 +98,7 @@ export async function startInterview(body: {
   answers: Record<string, unknown>;
   accessCode?: string;
   email?: string;
+  lang?: "nl" | "en";
 }): Promise<{ interviewId: string }> {
   const r = await fetch("/api/interview/start", {
     method: "POST",

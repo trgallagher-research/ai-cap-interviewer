@@ -10,6 +10,7 @@ import { VoiceButton } from "@/app/components/VoiceButton";
 import * as api from "./api";
 import type { AppConfig, FinishResponse, RateItem, Turn } from "./api";
 import { FeedbackView } from "./FeedbackView";
+import { displayRatingsText, LANG_KEY, STRINGS, type Lang, type Strings } from "./i18n";
 import { PhaseHint } from "./PhaseHint";
 import { Questionnaire, type Answers } from "./Questionnaire";
 import { RateCard } from "./RateCard";
@@ -69,38 +70,26 @@ function visible(text: string): string {
   return (i === -1 ? text : text.slice(0, i)).replace(/\s+$/, "");
 }
 const isRatingsText = (t: Turn) => t.role === "member" && /^My confidence ratings/.test(t.text);
-const isOpenChip = (t: string) => /^something else\b|^other\b/i.test(t.trim());
+const isOpenChip = (t: string) => /^something else\b|^other\b|^iets anders\b|^anders\b/i.test(t.trim());
 
-function errorMessage(e: unknown): { message: string; label: string } {
+function errorMessage(e: unknown, t: Strings): { message: string; label: string } {
   const err = e as api.ApiError;
-  const code = err && err.code;
-  switch (code) {
-    case "busy":
-      return { message: "Your previous answer is still being handled. Wait a moment, then try again.", label: "Try again" };
-    case "rate_limited":
-      return { message: "Too many interviews were started from this connection in the last hour. Please try again later.", label: "Try again" };
-    case "overloaded":
-      return { message: "Claude is busy right now. Wait a moment, then try again.", label: "Try again" };
-    case "full":
-      return { message: "This pilot has reached its maximum number of interviews. Please let the organiser know.", label: "Try again" };
-    case "access_code":
-      return { message: "That access code was not accepted. Check the code in your invitation and try again.", label: "Try again" };
-    case "refusal":
-      return { message: err.message || "Claude declined to answer this one. Please rephrase your last answer, or stop here.", label: "Try again" };
-    case "limit":
-      return { message: "This interview has reached its length limit. Please choose \u201cI'd like to stop here\u201d below to get your feedback.", label: "Try again" };
-    case "failed":
-      return { message: "Something went wrong while Claude was answering. Your answer is saved; try again.", label: "Retry" };
-    default:
-      return {
-        message: "Something went wrong while Claude was answering: " + (err && err.message ? err.message : String(e)) + ".",
-        label: "Retry",
-      };
-  }
+  const code = (err && err.code) || "";
+  const known = t.err[code];
+  if (code && typeof known === "string") return { message: known, label: code === "failed" ? t.retry : t.tryAgain };
+  // Messages for codes we do not translate come from the server in English.
+  return { message: code ? err.message || t.errGeneric(String(e)) : t.errGeneric(err && err.message ? err.message : String(e)), label: t.retry };
 }
 
 export function MemberApp() {
   const [config, setConfig] = useState<AppConfig | null>(null);
+  const [lang, setLangState] = useState<Lang>("nl");
+  const t = STRINGS[lang];
+  const setLang = useCallback((l: Lang) => {
+    setLangState(l);
+    lsSet(LANG_KEY, l);
+    if (typeof document !== "undefined") document.documentElement.lang = l;
+  }, []);
   const [screen, setScreen] = useState<Screen>("landing");
   const [ready, setReady] = useState(false);
   const [draftCard, setDraftCard] = useState<DraftCard | null>(null);
@@ -163,9 +152,23 @@ export function MemberApp() {
       /* ignore */
     }
     setAccessCode(ssGet(SS_CODE) || "");
+    // Language: ?lang= in the link, else the member's earlier choice, else the site default (Dutch).
+    let chosen: Lang | null = null;
+    try {
+      const q = new URL(window.location.href).searchParams.get("lang");
+      if (q === "nl" || q === "en") chosen = q;
+    } catch {
+      /* ignore */
+    }
+    const saved = lsGet(LANG_KEY);
+    if (!chosen && (saved === "nl" || saved === "en")) chosen = saved;
+    if (chosen) setLang(chosen);
     api
       .getConfig()
-      .then(setConfig)
+      .then((c) => {
+        setConfig(c);
+        if (!chosen) setLang(c.defaultLang === "en" ? "en" : "nl");
+      })
       .catch(() => setConfig({ voice: false, memberCodeRequired: false, storage: "redis", emailMode: "none" }));
 
     (async () => {
@@ -253,29 +256,29 @@ export function MemberApp() {
     const nm = name.trim();
     const rl = role.trim();
     if (!nm) {
-      setLandingError({ field: "name", text: "Please give a first name." });
+      setLandingError({ field: "name", text: t.errName });
       nameRef.current?.focus();
       return;
     }
     if (!rl) {
-      setLandingError({ field: "role", text: "Please describe your role in one line." });
+      setLandingError({ field: "role", text: t.errRole });
       roleRef.current?.focus();
       return;
     }
     const mode = config?.emailMode || "none";
     const em = mode === "none" ? "" : email.trim().toLowerCase();
     if (mode === "required" && !em) {
-      setLandingError({ field: "email", text: "Please enter your email address so we can send you your report." });
+      setLandingError({ field: "email", text: t.errEmailMissing });
       emailRef.current?.focus();
       return;
     }
     if (em && !EMAIL_RE.test(em)) {
-      setLandingError({ field: "email", text: "That email address does not look right." });
+      setLandingError({ field: "email", text: t.errEmailBad });
       emailRef.current?.focus();
       return;
     }
     if (config?.memberCodeRequired && !accessCode.trim()) {
-      setLandingError({ field: "code", text: "Please enter the access code from your invitation." });
+      setLandingError({ field: "code", text: t.errCode });
       codeRef.current?.focus();
       return;
     }
@@ -303,7 +306,7 @@ export function MemberApp() {
     setStartError(null);
     try {
       const code = accessCode.trim() || undefined;
-      const { interviewId: id } = await api.startInterview({ name: member.name, role: member.role, answers: a, accessCode: code, ...(member.email ? { email: member.email } : {}) });
+      const { interviewId: id } = await api.startInterview({ name: member.name, role: member.role, answers: a, accessCode: code, lang, ...(member.email ? { email: member.email } : {}) });
       lsSet(LS_ID, id);
       lsDel(LS_DRAFT);
       idRef.current = id;
@@ -319,7 +322,7 @@ export function MemberApp() {
       void runTurn({});
     } catch (e) {
       const err = e as api.ApiError;
-      setStartError({ message: errorMessage(err).message, code: err.code });
+      setStartError({ message: errorMessage(err, t).message, code: err.code });
     } finally {
       setStarting(false);
     }
@@ -329,6 +332,7 @@ export function MemberApp() {
   // Interview
   // ---------------------------------------------------------------------------
   function applyState(st: api.InterviewStateResponse) {
+    if (st.lang === "nl" || st.lang === "en") setLang(st.lang); // an interview keeps the language it started in
     setTurns(st.turns.filter((t) => !(t.role === "member" && /^\[.*\]$/.test(t.text.trim()))).map((t) => ({ ...t, ratings: isRatingsText(t) })));
     setPhase(st.phase || "orient");
     setStatus(st.status);
@@ -365,7 +369,7 @@ export function MemberApp() {
         return;
       }
       // During a turn, a rate limit is Claude's, not the per-connection start limit.
-      setTurnError(errorMessage(err.code === "rate_limited" ? Object.assign(err, { code: "overloaded" }) : err));
+      setTurnError(errorMessage(err.code === "rate_limited" ? Object.assign(err, { code: "overloaded" }) : err, t));
       return;
     }
     const text = visible(typeof done.text === "string" && done.text ? done.text : streamRef.current);
@@ -405,7 +409,7 @@ export function MemberApp() {
       st = await api.getState(id);
     } catch (e) {
       setBusy(false);
-      setTurnError(errorMessage(e));
+      setTurnError(errorMessage(e, t));
       return;
     } finally {
       if (!busyRef.current) setBusy(false);
@@ -504,7 +508,7 @@ export function MemberApp() {
       setScreen("feedback");
       window.scrollTo(0, 0);
     } catch (e) {
-      setFinishError(errorMessage(e).message.replace("while Claude was answering", "while preparing your feedback"));
+      setFinishError(errorMessage(e, t).message.replace("while Claude was answering", "while preparing your feedback").replace("terwijl Claude antwoordde", "bij het maken van je feedback"));
       setScreen("finishError");
     }
   }
@@ -529,7 +533,7 @@ export function MemberApp() {
     try {
       st = await api.getState(d.id);
     } catch (e) {
-      setLandingError({ field: "name", text: errorMessage(e).message });
+      setLandingError({ field: "name", text: errorMessage(e, t).message });
       return;
     }
     setDraftCard(null);
@@ -556,52 +560,57 @@ export function MemberApp() {
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
-  const who = config?.contactName || "The organiser";
+  const who = config?.contactName || t.TheOrganiser;
   const days = config?.retentionDays || 0;
 
   if (screen === "landing") {
     const d = draftCard;
     let where = "";
-    if (d && d.kind === "questionnaire") where = "the quick questions are not finished yet.";
-    else if (d && d.kind === "interview")
-      where = d.finished ? "your interview is finished." : `${d.n} answer${d.n === 1 ? "" : "s"} in the conversation so far.`;
+    if (d && d.kind === "questionnaire") where = t.draftQuestionnaire;
+    else if (d && d.kind === "interview") where = d.finished ? t.draftFinished : t.draftAnswers(d.n);
     return (
       <div className="stack" id="landing">
-        <div className="stack-sm">
-          <p className="eyebrow">For members of Systeeminterventies</p>
-          <h1>How does AI show up in your work?</h1>
+        <div className="lang-row">
+          <button
+            className="linkbtn"
+            type="button"
+            id="btn-lang"
+            lang={lang === "nl" ? "en" : "nl"}
+            aria-label={t.langSwitchLabel}
+            onClick={() => setLang(lang === "nl" ? "en" : "nl")}
+          >
+            {t.langSwitch}
+          </button>
         </div>
-        <p className="lead">
-          This takes about 15 minutes: a few short pages of questions, then a short conversation in English with an AI interviewer. It is about how
-          AI tools do or do not show up in your work: what you actually do, what you have learned, and where your edges are. There are no right
-          answers. People who never use AI are as interesting to us as daily users.
-        </p>
-        <p className="lead">
-          Near the end you rate your confidence on a few tasks drawn from your own practice. You then get personal feedback you can act on. The
-          organiser can read what you said, with your first name, and sees a map of the whole network built from everyone&apos;s interviews.
-        </p>
+        <div className="stack-sm">
+          <p className="eyebrow">{t.eyebrow}</p>
+          <h1>{t.title}</h1>
+        </div>
+        <p className="lead">{t.lead1}</p>
+        <p className="lead">{t.lead2}</p>
 
         {config?.contactEmail && (
           <p className="small" id="contact-line">
-            Questions? Email {config.contactName || "the organiser"} at <a href={"mailto:" + config.contactEmail}>{config.contactEmail}</a>.
+            {t.contact(config.contactName || t.theOrganiser)}
+            <a href={"mailto:" + config.contactEmail}>{config.contactEmail}</a>.
             {config.emailMode && config.emailMode !== "none" && config.emailSending && config.repliesToContact
-              ? ` Your report email comes from the AI at Work Diagnostic (alignedstudies.org); if you reply, it goes to ${config.contactName || "the organiser"}.`
+              ? t.contactReplies(config.contactName || t.theOrganiser)
               : ""}
           </p>
         )}
 
         {d && (
           <div className="card stack-sm" id="draft-card">
-            <p className="eyebrow">{d.kind === "interview" && d.finished ? "Finished interview" : "Unfinished interview"}</p>
+            <p className="eyebrow">{d.kind === "interview" && d.finished ? t.draftFinishedTitle : t.draftUnfinishedTitle}</p>
             <p>
-              {d.member.name || "You"} ({d.member.role || "no role given"}): {where}
+              {d.member.name || t.you} ({d.member.role || t.noRole}): {where}
             </p>
             <div className="row">
               <button className="btn primary" id="btn-continue" type="button" onClick={continueDraft}>
-                {d.kind === "interview" && d.finished ? "Show the feedback" : "Continue your interview"}
+                {d.kind === "interview" && d.finished ? t.showFeedback : t.continueInterview}
               </button>
               <button className="btn" id="btn-startover" type="button" onClick={startOver}>
-                Start again
+                {t.startAgain}
               </button>
             </div>
           </div>
@@ -609,14 +618,14 @@ export function MemberApp() {
 
         <form className="stack" id="start-form" onSubmit={onLandingSubmit} noValidate>
           <label className="field" htmlFor="f-name">
-            First name
+            {t.firstName}
             <input
               ref={nameRef}
               className="input"
               id="f-name"
               type="text"
               autoComplete="given-name"
-              placeholder="Anneke"
+              placeholder={t.namePlaceholder}
               required
               maxLength={60}
               value={name}
@@ -624,13 +633,13 @@ export function MemberApp() {
             />
           </label>
           <label className="field" htmlFor="f-role">
-            Your role in one line
+            {t.role}
             <input
               ref={roleRef}
               className="input"
               id="f-role"
               type="text"
-              placeholder="team coach, mostly healthcare organisations"
+              placeholder={t.rolePlaceholder}
               required
               maxLength={140}
               value={role}
@@ -639,7 +648,7 @@ export function MemberApp() {
           </label>
           {config?.emailMode && config.emailMode !== "none" && (
             <label className="field" htmlFor="f-email">
-              {config.emailMode === "required" ? "Email" : "Email (optional)"}
+              {config.emailMode === "required" ? t.email : t.emailOptional}
               <input
                 ref={emailRef}
                 className="input"
@@ -654,16 +663,14 @@ export function MemberApp() {
                 aria-describedby="f-email-hint"
               />
               <span className="small" id="f-email-hint" style={{ fontWeight: 400 }}>
-                {config.emailSending
-                  ? `We use your email only to send you your report. ${who} can see it, to follow up with you and the group.`
-                  : `${who} can see it, to follow up with you and the group. Your report will also be on screen at the end, with a private link.`}
-                {days ? ` Data from the survey will be deleted after ${days} days.` : ""}
+                {config.emailSending ? t.emailHintSending(who) : t.emailHintNotSending(who)}
+                {days ? t.deletedAfter(days) : ""}
               </span>
             </label>
           )}
           {config?.memberCodeRequired && (
             <label className="field" htmlFor="f-code">
-              Access code
+              {t.accessCode}
               <input
                 ref={codeRef}
                 className="input"
@@ -678,7 +685,7 @@ export function MemberApp() {
                 aria-describedby="f-code-hint"
               />
               <span className="small" id="f-code-hint" style={{ fontWeight: 400 }}>
-                It is in the invitation from the organiser.
+                {t.accessCodeHint}
               </span>
             </label>
           )}
@@ -686,12 +693,11 @@ export function MemberApp() {
             {landingError?.text}
           </p>
           <p className="small">
-            Your answers are saved for the organiser{days ? ` and deleted after ${days} days` : ""}. Use a first name only and leave out client names. This is a pilot: treat it as a test, not a
-            formal survey.
+            {t.privacy(days)}
           </p>
           <div className="row">
             <button className="btn primary" type="submit" id="btn-start" disabled={!ready}>
-              {d ? "Start a new interview" : "Start"}
+              {d ? t.startNew : t.start}
             </button>
           </div>
         </form>
@@ -705,7 +711,7 @@ export function MemberApp() {
         <p>{startError.message}</p>
         {startError.code === "access_code" && (
           <label className="field" htmlFor="f-code-retry">
-            Access code
+            {t.accessCode}
             <input
               className="input"
               id="f-code-retry"
@@ -726,6 +732,7 @@ export function MemberApp() {
     ) : null;
     return (
       <Questionnaire
+        lang={lang}
         member={member}
         initial={answers}
         busy={starting}
@@ -743,17 +750,17 @@ export function MemberApp() {
       <div className="stack" id="interview">
         <div className="progress">
           <span id="phase-hint">
-            <PhaseHint step={phase} />
+            <PhaseHint step={phase} lang={lang} />
           </span>
           <span>
             {member.name}, {member.role}
           </span>
         </div>
 
-        <div className="chat" id="chat" role="log" aria-label="Interview transcript" ref={chatRef}>
+        <div className="chat" id="chat" role="log" aria-label={t.transcript} ref={chatRef}>
           {turns.map((t, i) => (
             <div key={i} className={"bubble " + t.role + (t.ratings ? " ratings" : "")}>
-              {t.role === "interviewer" ? visible(t.text) : t.text}
+              {t.role === "interviewer" ? visible(t.text) : t.ratings ? displayRatingsText(t.text, lang) : t.text}
             </div>
           ))}
           {streaming !== null && (
@@ -761,10 +768,10 @@ export function MemberApp() {
               {visible(streaming)}
             </div>
           )}
-          {rating && rateItems && <RateCard key={rateItems.map((r) => r.id).join(",")} items={rateItems} disabled={busy} onSubmit={submitRatings} />}
+          {rating && rateItems && <RateCard key={rateItems.map((r) => r.id).join(",")} items={rateItems} lang={lang} disabled={busy} onSubmit={submitRatings} />}
         </div>
 
-        <div className="chips" id="chips" hidden={!showChips} role="group" aria-label="Quick replies">
+        <div className="chips" id="chips" hidden={!showChips} role="group" aria-label={t.quickReplies}>
           {showChips &&
             chips!.map((t) => (
               <button key={t} className={"chip" + (isOpenChip(t) ? " chip-open" : "")} type="button" onClick={() => onChip(t)}>
@@ -794,11 +801,9 @@ export function MemberApp() {
               id="answer"
               rows={2}
               placeholder={
-                config?.voice
-                  ? "Type or speak your answer. Enter sends, Shift+Enter makes a new line."
-                  : "Type your answer. Enter sends, Shift+Enter makes a new line."
+                config?.voice ? t.placeholderVoice : t.placeholder
               }
-              aria-label="Your answer"
+              aria-label={t.yourAnswer}
               disabled={busy}
               value={composer}
               onChange={(e) => setComposer(e.target.value)}
@@ -812,6 +817,7 @@ export function MemberApp() {
             {config?.voice && interviewId && (
               <VoiceButton
                 interviewId={interviewId}
+                lang={lang}
                 enabled={config.voice}
                 disabled={busy}
                 onText={(t) => {
@@ -821,23 +827,23 @@ export function MemberApp() {
               />
             )}
             <button className="btn primary" id="btn-send" type="button" onClick={send} disabled={busy}>
-              Send
+              {t.send}
             </button>
           </div>
           <div id="stop-wrap" className="small">
             {stopConfirm ? (
               <span className="row" id="stop-confirm">
-                <span>Stop now? Your feedback will be based on what you have shared so far.</span>
+                <span>{t.stopConfirm}</span>
                 <button className="btn" type="button" id="btn-stop-yes" onClick={confirmStop} disabled={busy}>
-                  Yes, stop here
+                  {t.stopYes}
                 </button>
                 <button className="btn quiet" type="button" id="btn-stop-no" onClick={() => setStopConfirm(false)}>
-                  Keep going
+                  {t.keepGoing}
                 </button>
               </span>
             ) : (
               <button className="linkbtn" id="btn-stop" type="button" disabled={busy} onClick={() => !busyRef.current && setStopConfirm(true)}>
-                I&apos;d like to stop here
+                {t.stop}
               </button>
             )}
           </div>
@@ -849,11 +855,11 @@ export function MemberApp() {
   if (screen === "preparing") {
     return (
       <div className="stack" id="preparing">
-        <h1>Thank you, {member?.name}</h1>
+        <h1>{t.thanks(member?.name || "")}</h1>
         <p className="lead">
-          <span className="spinner" aria-hidden="true" /> Preparing your feedback…
+          <span className="spinner" aria-hidden="true" /> {t.preparing}
         </p>
-        <p className="small">This takes a little while. Claude is reading the whole conversation once more.</p>
+        <p className="small">{t.preparingNote}</p>
       </div>
     );
   }
@@ -861,19 +867,16 @@ export function MemberApp() {
   if (screen === "finishError") {
     return (
       <div className="stack" id="profile-error">
-        <h1>Your feedback could not be prepared</h1>
+        <h1>{t.feedbackFailed}</h1>
         <div className="notice bad">{finishError}</div>
         <div className="row">
           <button className="btn primary" type="button" id="btn-retry-profile" onClick={() => void complete()}>
-            Try again
+            {t.tryAgain}
           </button>
         </div>
         <div className="card stack-sm">
-          <h2>Nothing is lost</h2>
-          <p className="small">
-            Your conversation is saved. If trying again does not work, come back to this page later on this device and choose &ldquo;Continue your
-            interview&rdquo;, or let the organiser know.
-          </p>
+          <h2>{t.nothingLost}</h2>
+          <p className="small">{t.nothingLostText}</p>
         </div>
       </div>
     );
@@ -883,28 +886,28 @@ export function MemberApp() {
     const reportUrl = finish.reportToken && typeof window !== "undefined" ? window.location.origin + "/r/" + finish.reportToken : "";
     return (
       <div className="stack feedback" id="feedback">
-        <FeedbackView feedback={finish.feedback} ratings={finish.ratings} />
+        <FeedbackView feedback={finish.feedback} ratings={finish.ratings} lang={lang} />
         {reportUrl && (
           <section className="card stack-sm" id="report-link">
-            <h2>Keep your report</h2>
+            <h2>{t.keepReport}</h2>
             <p className="small">
-              {finish.emailState === "sent" ? "We have also emailed it to you. " : ""}
-              This private link opens your report on any device{days ? ` for ${days} days` : ""}. Anyone with the link can read it, so keep it to yourself.
+              {finish.emailState === "sent" ? t.emailedToo : ""}
+              {t.reportLinkText(days)}
             </p>
             <div className="row">
-              <input className="input" id="report-url" readOnly value={reportUrl} onFocus={(e) => e.currentTarget.select()} aria-label="Private link to your report" />
+              <input className="input" id="report-url" readOnly value={reportUrl} onFocus={(e) => e.currentTarget.select()} aria-label={t.reportLinkLabel} />
               <button className="btn" type="button" id="btn-copy-report" onClick={() => void navigator.clipboard?.writeText(reportUrl).catch(() => {})}>
-                Copy link
+                {t.copyLink}
               </button>
             </div>
           </section>
         )}
         <p className="small" id="save-status">
-          Your answers have been saved for the organiser.
+          {t.saved}
         </p>
         <p className="small">
           <button className="linkbtn" type="button" id="btn-another" onClick={resetAll}>
-            Start another interview
+            {t.another}
           </button>
         </p>
       </div>

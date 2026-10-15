@@ -425,3 +425,54 @@ test("stats: statement counts, why-not, access-not-asked, search and calibration
   assert.equal(q.calibration["in-line"], 1);
   assert.equal(q.calibration.unknown, 1);
 });
+
+// ---------------------------------------------------------------------------
+// Dutch version
+// ---------------------------------------------------------------------------
+test("Dutch: every question, option, hint and page has Dutch wording; UI strings match in both languages", async () => {
+  const { QUESTIONS_NL, PAGES_NL } = await import("../../app/components/member/questionnaire-nl");
+  const { STRINGS } = await import("../../app/components/member/i18n");
+  for (const pg of P.PAGES) assert.ok(PAGES_NL[pg.id]?.title && PAGES_NL[pg.id]?.intro, "page " + pg.id);
+  for (const [id, q] of Object.entries(P.QUESTIONNAIRE)) {
+    const nl = QUESTIONS_NL[id];
+    assert.ok(nl && nl.label, "question " + id);
+    if (q.sub) assert.ok(nl.sub, "subheading " + id);
+    for (const o of q.options) {
+      // Product names (ChatGPT, Claude…) need no translation; everything else must have it.
+      const same = id === "tools" && o.key === o.label;
+      assert.ok(same || nl.options?.[o.key], `option ${id}.${o.key}`);
+      if (o.hint) assert.ok(nl.hints?.[o.key], `hint ${id}.${o.key}`);
+    }
+  }
+  const keys = (o: object) => Object.keys(o).sort();
+  assert.deepEqual(keys(STRINGS.nl), keys(STRINGS.en));
+  assert.deepEqual(keys(STRINGS.nl.err), keys(STRINGS.en.err));
+  assert.deepEqual(keys(STRINGS.nl.phase), keys(STRINGS.en.phase));
+  assert.deepEqual(keys(STRINGS.nl.voice), keys(STRINGS.en.voice));
+});
+
+test("Dutch: interviewer speaks Dutch with 'je'; feedback in Dutch, organiser fields in English; share-back in Dutch; lang round-trips", async () => {
+  const m = { name: "Anneke", role: "teamcoach" };
+  const nl = P.buildInterviewSystem(m, WEEKLY, "nl");
+  assert.match(nl, /one-to-one interview, in Dutch, for the AI at Work Diagnostic run by \nMakersnetwerk|in Dutch, for the AI at Work Diagnostic run by Makersnetwerk/);
+  assert.match(nl, /addressing Anneke with "je" \(never "u"\)/);
+  assert.match(nl, /"Iets anders"/);
+  assert.doesNotMatch(P.buildInterviewSystem(m, WEEKLY), /Dutch: natural|"je"/);
+  assert.match(P.buildInterviewSystem(m, WEEKLY), /in English, for the AI at Work Diagnostic run by Makersnetwerk/);
+  const pr = P.buildProfilePrompt(m, [], RATE_ITEMS, {}, WEEKLY, "nl");
+  assert.match(pr, /Write every string inside "feedback" in natural, plain Dutch/);
+  assert.match(pr, /Dank je, Anneke/);
+  assert.match(P.buildProfilePrompt(m, [], RATE_ITEMS, {}, WEEKLY), /All strings in English/);
+  assert.match(P.buildSharebackPrompt(SEED, E.stats(SEED)), /Write for the members, in Dutch/);
+  assert.doesNotMatch(P.buildProductReadPrompt(SEED, E.stats(SEED)), /Write [^.]*in Dutch/);
+  for (const prompt of [nl, pr, P.buildSharebackPrompt(SEED, E.stats(SEED)), P.buildProductReadPrompt(SEED, E.stats(SEED))]) assert.doesNotMatch(prompt, /Systeeminterventies/);
+  const iv = new E.Interview(m, WEEKLY);
+  assert.equal(iv.lang, "en");
+  assert.equal("lang" in iv.toJSON(), false, "English interviews serialise as before");
+  iv.lang = "nl";
+  const back = E.Interview.fromJSON(JSON.parse(JSON.stringify(iv.toJSON())));
+  assert.equal(back.lang, "nl");
+  assert.match(back.system(), /in Dutch/);
+  assert.equal(E.assembleProfile(back, { practice: { level: 1 } }).lang, "nl");
+  assert.equal(E.assembleProfile(new E.Interview(m, WEEKLY), { practice: { level: 1 } }).lang, undefined);
+});

@@ -5,6 +5,7 @@
  * which drops it into the answer box for the member to edit and send. */
 
 import { useEffect, useRef, useState } from "react";
+import { STRINGS, type Lang } from "./member/i18n";
 
 interface Props {
   interviewId?: string;
@@ -14,6 +15,7 @@ interface Props {
   /** Called with the transcribed text — the caller drops it into an editable field. */
   onText: (text: string) => void;
   maxSeconds?: number;
+  lang?: Lang;
 }
 
 type State = "idle" | "recording" | "transcribing";
@@ -73,7 +75,8 @@ function MicIcon() {
   );
 }
 
-export function VoiceButton({ interviewId, disabled, enabled = true, onText, maxSeconds = 150 }: Props) {
+export function VoiceButton({ interviewId, disabled, enabled = true, onText, maxSeconds = 150, lang = "en" }: Props) {
+  const v = STRINGS[lang].voice;
   const [state, setState] = useState<State>("idle");
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -142,7 +145,7 @@ export function VoiceButton({ interviewId, disabled, enabled = true, onText, max
         });
       }, 1000);
     } catch {
-      setError("Microphone unavailable");
+      setError(v.mic);
       setState("idle");
     }
   }
@@ -176,12 +179,12 @@ export function VoiceButton({ interviewId, disabled, enabled = true, onText, max
       const r = await fetch("/api/transcribe", { method: "POST", body: form });
       if (!r.ok) {
         const j = (await r.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j.error || "Transcription failed");
+        throw new Error(j.error || v.failed);
       }
       const { text } = (await r.json()) as { text: string };
       if (text) onText(text);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Transcription failed");
+      setError(e instanceof Error ? e.message : v.failed);
     } finally {
       setState("idle");
       setSeconds(0);
@@ -194,13 +197,13 @@ export function VoiceButton({ interviewId, disabled, enabled = true, onText, max
 
   if (state === "recording") {
     return (
-      <span className="voice recording" role="group" aria-label="Recording">
+      <span className="voice recording" role="group" aria-label={v.recording}>
         <span className="voice-dot" aria-hidden />
         <span className="voice-time">{mmss}</span>
-        <button type="button" className="voice-btn keep" onClick={keep} title="Stop and use this recording" aria-label="Stop and use this recording">
+        <button type="button" className="voice-btn keep" onClick={keep} title={v.keep} aria-label={v.keep}>
           ✓
         </button>
-        <button type="button" className="voice-btn cancel" onClick={cancel} title="Discard recording" aria-label="Discard recording">
+        <button type="button" className="voice-btn cancel" onClick={cancel} title={v.discard} aria-label={v.discard}>
           ✕
         </button>
       </span>
@@ -215,8 +218,8 @@ export function VoiceButton({ interviewId, disabled, enabled = true, onText, max
         id="btn-voice"
         onClick={start}
         disabled={disabled || state === "transcribing"}
-        title={state === "transcribing" ? "Transcribing…" : "Speak your answer"}
-        aria-label={state === "transcribing" ? "Transcribing" : "Speak your answer"}
+        title={state === "transcribing" ? v.transcribing : v.speak}
+        aria-label={state === "transcribing" ? v.transcribingShort : v.speak}
       >
         {state === "transcribing" ? <span className="spinner" aria-hidden="true" /> : <MicIcon />}
       </button>

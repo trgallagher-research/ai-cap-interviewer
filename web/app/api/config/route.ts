@@ -20,5 +20,6 @@ export async function GET() {
     contactEmail: contact().email,
     repliesToContact: !!replyTo() && replyTo() === contact().email,
     retentionDays: retentionDays(),
+    defaultLang: process.env.DEFAULT_LANG === "en" ? "en" : "nl",
   });
 }

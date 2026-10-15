@@ -12,7 +12,7 @@ export function transcriptionEnabled(): boolean {
 }
 
 /** Text plus the audio length Groq reports (seconds; 0 when it gives none), for cost tracking. */
-export async function transcribe(file: Blob, filename: string): Promise<{ text: string; seconds: number }> {
+export async function transcribe(file: Blob, filename: string, language?: string): Promise<{ text: string; seconds: number }> {
   const key = process.env.GROQ_API_KEY;
   if (!key) throw new Error("GROQ_API_KEY is not set");
 
@@ -20,7 +20,8 @@ export async function transcribe(file: Blob, filename: string): Promise<{ text: 
   form.append("file", file, filename);
   form.append("model", MODEL);
   form.append("response_format", "verbose_json"); // includes the audio duration
-  // Members answer in English for the pilot, but Whisper auto-detects; leave language unset.
+  // The interview's language helps Whisper with short answers; without it Whisper auto-detects.
+  if (language) form.append("language", language);
 
   const res = await fetch(GROQ_URL, {
     method: "POST",

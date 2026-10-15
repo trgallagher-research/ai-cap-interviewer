@@ -7,7 +7,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PAGES, QUESTIONNAIRE, QUESTION_ORDER, questionSkipped } from "@/lib/aiwd/prompts";
+import { STRINGS, type Lang } from "./i18n";
 import { PhaseHint } from "./PhaseHint";
+import { PAGES_NL, QUESTIONS_NL } from "./questionnaire-nl";
 
 export type Answers = Record<string, string | string[]>;
 
@@ -54,6 +56,7 @@ export function deriveAnswers(raw: Answers): Answers {
 }
 
 interface Props {
+  lang: Lang;
   member: { name: string; role: string };
   initial: Answers;
   busy: boolean;
@@ -62,7 +65,13 @@ interface Props {
   onSubmit: (answers: Answers) => void;
 }
 
-export function Questionnaire({ member, initial, busy, error, onChange, onSubmit }: Props) {
+export function Questionnaire({ lang, member, initial, busy, error, onChange, onSubmit }: Props) {
+  const t = STRINGS[lang];
+  const nl = lang === "nl";
+  const qLabel = (qid: string, q: QDef) => (nl && QUESTIONS_NL[qid]?.label) || q.label;
+  const qSub = (qid: string, q: QDef) => (nl && QUESTIONS_NL[qid]?.sub) || q.sub;
+  const oLabel = (qid: string, o: QOption) => (nl && QUESTIONS_NL[qid]?.options?.[o.key]) || o.label;
+  const oHint = (qid: string, o: QOption) => (nl && QUESTIONS_NL[qid]?.hints?.[o.key]) || o.hint;
   const [raw, setRaw] = useState<Answers>(() => ({ ...initial }));
   const [invalid, setInvalid] = useState<Record<string, boolean>>({});
   const [page, setPage] = useState(0);
@@ -157,7 +166,7 @@ export function Questionnaire({ member, initial, busy, error, onChange, onSubmit
     const val = raw[qid];
     const sub = q.sub && !hide ? (
       <h3 className="q-sub" key={qid + "-sub"}>
-        {q.sub}
+        {qSub(qid, q)}
       </h3>
     ) : null;
     const fieldset = (
@@ -172,8 +181,8 @@ export function Questionnaire({ member, initial, busy, error, onChange, onSubmit
         }}
       >
         <legend>
-          {q.label}
-          {q.required ? <span className="q-req"> (required)</span> : null}
+          {qLabel(qid, q)}
+          {q.required ? <span className="q-req">{t.qRequired}</span> : null}
         </legend>
         {q.type === "text" ? (
           <textarea
@@ -201,8 +210,8 @@ export function Questionnaire({ member, initial, busy, error, onChange, onSubmit
                     onChange={(e) => toggle(qid, o, e.target.checked)}
                   />
                   <span className="opt-text">
-                    <span className="opt-label">{o.label}</span>
-                    {o.hint ? <span className="opt-hint">{o.hint}</span> : null}
+                    <span className="opt-label">{oLabel(qid, o)}</span>
+                    {oHint(qid, o) ? <span className="opt-hint">{oHint(qid, o)}</span> : null}
                   </span>
                 </label>
               );
@@ -211,7 +220,7 @@ export function Questionnaire({ member, initial, busy, error, onChange, onSubmit
         )}
         {q.other ? (
           <label className="field q-other" htmlFor={`q-${qid}-other`}>
-            <span className="small">Other</span>
+            <span className="small">{t.qOther}</span>
             <input
               className="input"
               type="text"
@@ -223,7 +232,7 @@ export function Questionnaire({ member, initial, busy, error, onChange, onSubmit
           </label>
         ) : null}
         <p className="q-error" id={"q-err-" + qid} role="alert" hidden={!invalid[qid]}>
-          Please choose one.
+          {t.qChooseOne}
         </p>
       </fieldset>
     );
@@ -234,21 +243,21 @@ export function Questionnaire({ member, initial, busy, error, onChange, onSubmit
     <div className="stack" id="questionnaire" data-page={pg.id} ref={topRef}>
       <div className="progress">
         <span>
-          <PhaseHint step="quick" />
+          <PhaseHint step="quick" lang={lang} />
         </span>
         <span>
           {member.name}, {member.role}
         </span>
       </div>
       {page === 0 ? (
-        <p className="lead">A few short pages of questions first. Then a short conversation about one or two real examples.</p>
+        <p className="lead">{t.qLead}</p>
       ) : null}
       <div className="stack-sm">
         <p className="eyebrow" id="q-step">
-          Part {page + 1} of {PAGES.length}
+          {t.qPart(page + 1, PAGES.length)}
         </p>
-        <h2 id="q-page-title">{pg.title}</h2>
-        {page > 0 ? <p className="small">{pg.intro}</p> : null}
+        <h2 id="q-page-title">{(nl && PAGES_NL[pg.id]?.title) || pg.title}</h2>
+        {page > 0 ? <p className="small">{(nl && PAGES_NL[pg.id]?.intro) || pg.intro}</p> : null}
       </div>
 
       <form className="stack q-form" id="q-form" noValidate onSubmit={submit}>
@@ -257,16 +266,16 @@ export function Questionnaire({ member, initial, busy, error, onChange, onSubmit
         <div className="row">
           {page > 0 ? (
             <button className="btn" type="button" id="btn-q-back" disabled={busy} onClick={() => go(page - 1)}>
-              Back
+              {t.qBack}
             </button>
           ) : null}
           {last ? (
             <button className="btn primary" type="submit" id="btn-q-continue" disabled={busy}>
-              {busy ? "Starting…" : "Continue to the conversation"}
+              {busy ? t.qStarting : t.qContinue}
             </button>
           ) : (
             <button className="btn primary" type="submit" id="btn-q-next" disabled={busy}>
-              Next
+              {t.qNext}
             </button>
           )}
         </div>

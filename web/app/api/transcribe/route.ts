@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
 
   const filename = file instanceof File && file.name ? file.name : `audio.${file.type.includes("mp4") ? "mp4" : "webm"}`;
   try {
-    const { text, seconds } = await transcribe(file, filename);
+    const { text, seconds } = await transcribe(file, filename, rec.state.lang === "nl" ? "nl" : "en");
     await recordCost("voice", { micro: voiceMicro(seconds), calls: 1, seconds: Math.round(seconds) }, interviewId as string).catch((e) => console.error("cost record failed", e));
     return NextResponse.json({ text });
   } catch (err) {

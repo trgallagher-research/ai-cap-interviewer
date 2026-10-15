@@ -7,7 +7,10 @@
  *
  * Pure functions and data only: no server imports, safe in client components.
  */
-import type { Answers, ChatMessage, Domain, LadderStep, Member, Phase, Profile, Question, QuestionOption, QuestionPage, RateItem, Ratings, SelfCheck, Stance, Turn } from "./types";
+import type { Answers, ChatMessage, Domain, Lang, LadderStep, Member, Phase, Profile, Question, QuestionOption, QuestionPage, RateItem, Ratings, SelfCheck, Stance, Turn } from "./types";
+
+/** The network the diagnostic is run for (named in every prompt). */
+export const NETWORK = "Makersnetwerk";
 
 /** First user message of every interview (the instruction block is the system prompt). */
 export const KICKOFF = "[The interview begins now.]";
@@ -332,7 +335,7 @@ export const KICKOFF = "[The interview begins now.]";
   }
 
   /** The interviewer's standing instructions. Sent once as the first user message. */
-  export function buildInterviewSystem(member: Partial<Member> | null | undefined, answers: Answers | null | undefined): string {
+  export function buildInterviewSystem(member: Partial<Member> | null | undefined, answers: Answers | null | undefined, lang: Lang = "en"): string {
     const name = (member && member.name) ? member.name.trim() : "the member";
     const role = (member && member.role) ? member.role.trim() : "a member of the network";
     const ticked = answers && Array.isArray(answers.uses) ? answers.uses.length : 0;
@@ -341,11 +344,15 @@ export const KICKOFF = "[The interview begins now.]";
     const nonUser = !!answers && (answers.frequency === "never" || (answers.frequency === "tried" && ticked === 0));
     const doubtful = !!answers && (answers.stance === "sceptical" || answers.stance === "worried");
     return `\
-You are conducting a one-to-one interview, in English, for the AI at Work Diagnostic run by \
-Systeeminterventies, a Dutch network of managers, advisers, trainers and coaches who work on \
+You are conducting a one-to-one interview, in ${lang === "nl" ? "Dutch" : "English"}, for the AI at Work Diagnostic run by \
+${NETWORK}, a Dutch network of managers, advisers, trainers and coaches who work on \
 collaboration and conflict in organisations. The person you are talking to is ${name}, who \
-described their role as "${role}". Many members work in Dutch day to day; they are answering in \
-English because the network is piloting this in English. Keep your language plain and short.
+described their role as "${role}". ${lang === "nl" ? `Conduct the whole interview in Dutch: natural, plain spoken \
+Dutch as colleagues use it, addressing ${name} with "je" (never "u"). Everything the member sees is in Dutch, \
+including quick replies (say "Iets anders" for "Something else") and the rating task statements. These \
+instructions are in English and their examples are illustrations: say them in natural Dutch, never \
+translate word for word. If ${name} answers in English, you may continue in English.` : `Many members work in Dutch day to day; they chose to answer in \
+English. Keep your language plain and short.`}${lang === "nl" ? " Keep your language plain and short." : ""}
 
 # Purpose
 Find out, in concrete terms, how ${name} actually uses AI tools in their own work today (or why \
@@ -544,7 +551,7 @@ and ask your first question.`;
       .join("\n\n");
   }
 
-  export function buildProfilePrompt(member: Partial<Member>, turns: Turn[], items: RateItem[] | null | undefined, ratings: Ratings | null | undefined, answers: Answers | null | undefined): string {
+  export function buildProfilePrompt(member: Partial<Member>, turns: Turn[], items: RateItem[] | null | undefined, ratings: Ratings | null | undefined, answers: Answers | null | undefined, lang: Lang = "en"): string {
     const name = member.name || "the member";
     const ratingLines = (items || []).map((it) => {
       const r = ratings ? ratings[it.id] : undefined;
@@ -554,7 +561,7 @@ and ask your first question.`;
     const sc = computeSelfCheck(answers, rated.length ? Math.round(rated.reduce((x, y) => x + y, 0) / rated.length) : null);
     return `\
 You are writing the profile for one member who has just finished the AI at Work Diagnostic \
-interview for Systeeminterventies (a Dutch network of managers, advisers, trainers and coaches \
+interview for ${NETWORK} (a Dutch network of managers, advisers, trainers and coaches \
 working on collaboration and conflict in organisations). You are given their opening \
 questionnaire, their interview transcript and their self-efficacy ratings. Produce ONE JSON object and nothing else: no prose before or \
 after, no code fences.
@@ -625,7 +632,10 @@ Empty string if they line up or there is too little to compare.
 - Never invent views, tools or episodes they did not mention. Where there is little signal, say \
 so rather than fill the gap. No scores in the feedback text.
 
-# Output shape (all fields required; strings in English; keep each string short)
+# Output shape (all fields required; keep each string short)
+${lang === "nl" ? `Language: the member took part in Dutch. Write every string inside "feedback" in natural, plain Dutch, \
+addressing them with "je" (never "u"). Keep "quotes" verbatim (Dutch). All other strings (practice, \
+confidence, wants, offers, productSignals) are for the organiser and are in English.` : "All strings in English; quotes verbatim."}
 {
   "practice": {
     "level": 0-4,
@@ -645,7 +655,7 @@ so rather than fill the gap. No scores in the feedback text.
     "quote": "a short verbatim line from the interview about what they would value, or empty string"
   },
   "feedback": {
-    "headline": "one warm line, e.g. 'Thanks ${name}: here is what stood out'",
+    "headline": "one warm line, e.g. ${lang === "nl" ? `'Dank je, ${name}: dit viel op'` : `'Thanks ${name}: here is what stood out'`}",
     "summary": "2–3 sentences, second person",
     "strengths": [ "1–2 items, each one sentence, grounded in an episode" ],
     "nextSteps": [ { "title": "short imperative", "detail": "1–2 sentences: why this, for them, and how they will know it worked", "steps": [ "2–3 specific next steps, each one sentence" ] } ],   // 2–3 pieces of advice
@@ -695,16 +705,17 @@ ${transcriptText(turns)}`;
   export function buildSharebackPrompt(profiles: Profile[], stats: unknown): string {
     const data = profiles.map(compactProfileForAggregate);
     return `\
-You are writing a short share-back page for the members of Systeeminterventies, a Dutch network \
+You are writing a short share-back page for the members of ${NETWORK}, a Dutch network \
 of managers, advisers, trainers and coaches who work on collaboration and conflict in \
 organisations. ${profiles.length} members each had an AI-led interview about how they use AI in \
 their work and rated their confidence on tasks from their own practice. You are given the \
-anonymised profiles and some computed statistics. Write for the members, in English, warm and \
+anonymised profiles and some computed statistics. Write for the members, in Dutch (natural and plain, \
+addressing the reader with "je"), warm and \
 plain, as a colleague reporting back to colleagues. Produce ONE JSON object and nothing else.
 
 Rules:
 - Faithful to the data. Express how common something is in plain words ("most of us", "a few", \
-"about a third"), never percentages or scores. Never name a member. Quotes must be verbatim \
+"about a third"), never percentages or scores. Never name a member. Quotes must be verbatim (in the language they were said) \
 from the "quotes" fields.
 - No ladder levels, no "level 3", no jargon. Describe practice in everyday words.
 - The members are the audience: this should make them want to talk to each other. Name what \
@@ -738,7 +749,7 @@ Output shape:
   export function buildProductReadPrompt(profiles: Profile[], stats: unknown): string {
     const data = profiles.map(compactProfileForAggregate);
     return `\
-You advise the organiser of Systeeminterventies, a Dutch network of managers, advisers, trainers \
+You advise the organiser of ${NETWORK}, a Dutch network of managers, advisers, trainers \
 and coaches working on collaboration and conflict in organisations. She wants to offer members \
 something on AI literacy, possibly paid, and is tired of giving advice away for free. She has \
 run an AI-led diagnostic interview with ${profiles.length} members. You are given anonymised \

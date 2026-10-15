@@ -535,6 +535,54 @@ async function patchNextChips(page, chips) {
         await ctx0.close();
       }
     }
+    // 7e. Dutch: ?lang=nl, the language switch, a Dutch questionnaire, interview and feedback, Dutch report page
+    {
+      const { ctx, page } = await newPage(browser, { path: "/?lang=nl" });
+      check("Dutch start page", (await page.textContent("h1")) === "Hoe zit AI in jouw werk?" && (await page.textContent("#landing .eyebrow")).includes("Makersnetwerk"));
+      check("html lang is nl", (await page.getAttribute("html", "lang")) === "nl");
+      await page.click("#btn-lang");
+      check("switch to English", (await page.textContent("h1")) === "How does AI show up in your work?" && (await page.textContent("#btn-lang")) === "Nederlands");
+      await page.click("#btn-lang");
+      check("switch back to Dutch and remember it", (await page.textContent("h1")) === "Hoe zit AI in jouw werk?" && (await page.evaluate(() => localStorage.getItem("aiwd.lang"))) === "nl");
+      await page.click("#btn-start");
+      check("Dutch validation message", (await page.textContent("#f-error")) === "Vul je voornaam in.");
+      await page.fill("#f-name", "Daan" + RUN);
+      await page.fill("#f-role", "mediator");
+      await page.click("#btn-start");
+      await page.waitForSelector("#questionnaire");
+      const qText = await page.textContent("#questionnaire");
+      check("Dutch questionnaire", qText.includes("Hoe vaak speelt een AI-tool") && qText.includes("Deel 1 van 4") && qText.includes("In plaats van een zoekmachine"));
+      await page.click("#btn-q-next");
+      check("Dutch required error", (await page.textContent("#q-err-frequency")) === "Kies er een.");
+      await page.click("label[for='q-frequency-never']");
+      await page.click("label[for='q-stance-sceptical']");
+      await nextPage(page, "views");
+      check("Dutch agreement scale", (await page.textContent("label[for='q-viewEssential-sa']")).includes("Helemaal eens"));
+      await nextPage(page, "skills");
+      await nextPage(page, "support");
+      await page.click("label[for='q-offer-nothing']");
+      await page.click("#btn-q-continue");
+      await page.waitForSelector("#interview");
+      await waitIdle(page);
+      const st = await page.evaluate(async () => (await fetch("/api/interview/state?id=" + localStorage.getItem("aiwd.interviewId"))).json());
+      check("interview recorded as Dutch", st.lang === "nl", JSON.stringify(st.lang));
+      check("Dutch interview screen", (await page.getAttribute("#answer", "placeholder")).startsWith("Typ je antwoord") && (await page.textContent("#btn-send")) === "Versturen");
+      await page.click("#btn-stop");
+      check("Dutch stop confirmation", (await page.textContent("#stop-confirm")).includes("Nu stoppen?"));
+      await page.click("#btn-stop-yes");
+      await page.waitForSelector("#feedback", { timeout: 30000 });
+      const fb = await page.textContent("#feedback");
+      check("Dutch feedback page", fb.includes("Je feedback") && fb.includes("Wat opviel") && fb.includes("Bewaar je rapport"), fb.slice(0, 200));
+      const url = await page.inputValue("#report-url");
+      const rp = await page.request.get(url);
+      const rt = await rp.text();
+      check("Dutch report page", rp.status() === 200 && rt.includes("Dit is je persoonlijke rapport") && rt.includes("Wat opviel"));
+      await ctx.close();
+      // The default (Dutch) applies again for a new visitor once English was not chosen; the test server defaults to English.
+      const c2 = await newPage(browser, { path: "/?lang=en" });
+      check("?lang=en opens in English", (await c2.page.textContent("h1")) === "How does AI show up in your work?");
+      await c2.ctx.close();
+    }
     // 8. Open chip only focuses the box; typed text wins over a tap
     {
       const { ctx, page } = await newPage(browser);

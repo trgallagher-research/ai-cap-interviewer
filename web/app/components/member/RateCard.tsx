@@ -2,16 +2,19 @@
 
 import { useMemo, useState } from "react";
 import type { RateItem } from "./api";
+import { STRINGS, type Lang } from "./i18n";
 
 interface Props {
   items: RateItem[];
+  lang: Lang;
   disabled?: boolean;
   onSubmit: (ratings: Record<string, number>) => void;
 }
 
 /** Confidence sliders 0–100 step 5, easiest task first, with a per-item skip (port of showRateCard).
  *  Sliders start unset (no anchor value); every item must be rated or skipped before sending. */
-export function RateCard({ items, disabled, onSubmit }: Props) {
+export function RateCard({ items, lang, disabled, onSubmit }: Props) {
+  const t = STRINGS[lang];
   // Easiest first, stable.
   const sorted = useMemo(
     () =>
@@ -38,11 +41,8 @@ export function RateCard({ items, disabled, onSubmit }: Props) {
 
   return (
     <div className="card rate-card stack-sm" id="rate-card">
-      <p className="eyebrow">Rate your confidence</p>
-      <p className="small">
-        For each task, how confident are you that you can do it right now? Tap or drag on the scale: 0 = cannot do at all, 100 = highly certain you
-        can do it. There are no right answers.
-      </p>
+      <p className="eyebrow">{t.rateEyebrow}</p>
+      <p className="small">{t.rateIntro}</p>
       <div>
         {sorted.map((it) => {
           const v = values[it.id];
@@ -60,8 +60,8 @@ export function RateCard({ items, disabled, onSubmit }: Props) {
                   value={unset ? 50 : v}
                   id={"range-" + it.id}
                   disabled={sk}
-                  aria-label={"Confidence for: " + it.task}
-                  aria-valuetext={unset ? "not rated yet" : String(v)}
+                  aria-label={t.rateFor + it.task}
+                  aria-valuetext={unset ? t.rateNotYet : String(v)}
                   onChange={(e) => set(it.id, e.target.value)}
                   // A tap on the hidden midpoint fires no change event, so record it on release too.
                   onPointerUp={(e) => set(it.id, e.currentTarget.value)}
@@ -72,9 +72,9 @@ export function RateCard({ items, disabled, onSubmit }: Props) {
                 </span>
               </div>
               <div className="rate-anchors" aria-hidden="true">
-                <span>Cannot do at all</span>
-                <span>Moderately certain</span>
-                <span>Highly certain</span>
+                <span>{t.rateCannot}</span>
+                <span>{t.rateModerate}</span>
+                <span>{t.rateHigh}</span>
               </div>
               <label className="skip" htmlFor={"skip-" + it.id}>
                 <input
@@ -83,7 +83,7 @@ export function RateCard({ items, disabled, onSubmit }: Props) {
                   checked={sk}
                   onChange={(e) => setSkips((p) => ({ ...p, [it.id]: e.target.checked }))}
                 />
-                Skip this one
+                {t.rateSkip}
               </label>
             </div>
           );
@@ -91,11 +91,11 @@ export function RateCard({ items, disabled, onSubmit }: Props) {
       </div>
       <div className="row">
         <button className="btn primary" type="button" id="btn-rate-submit" disabled={sent || disabled || remaining > 0} onClick={submit}>
-          Send my ratings
+          {t.rateSend}
         </button>
         {remaining > 0 && (
           <span className="small muted" id="rate-remaining">
-            Rate or skip {remaining === 1 ? "1 more task" : remaining + " more tasks"}
+            {t.rateRemaining(remaining)}
           </span>
         )}
       </div>

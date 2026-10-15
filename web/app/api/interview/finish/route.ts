@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
       await saveProfile(profile);
       await saveReportToken(profile.reportToken, profile);
       if (rec.email && (await getSettings()).emailMode !== "none") {
-        const state = await sendReport(rec.email, profile.member.name, profile.feedback, baseUrl(req) + "/r/" + profile.reportToken, retentionDays());
+        const state = await sendReport(rec.email, profile.member.name, profile.feedback, baseUrl(req) + "/r/" + profile.reportToken, retentionDays(), profile.lang);
         profile.emailStatus = { state, at: new Date().toISOString() };
         await saveProfile(profile);
       }

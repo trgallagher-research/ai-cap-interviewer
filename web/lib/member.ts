@@ -19,6 +19,7 @@ export function memberState(rec: InterviewRecord) {
   const s = rec.state;
   return {
     member: { name: s.member.name, role: s.member.role },
+    lang: s.lang === "nl" ? "nl" : "en",
     answers: s.answers,
     turns: s.turns.map((t) => (t.tapped ? { role: t.role, text: t.text, tapped: true } : { role: t.role, text: t.text })),
     phase: s.phase,

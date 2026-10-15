@@ -11,8 +11,7 @@
 import * as P from "./prompts";
 import type {
   Answers, Band, ChatMessage, Divergence, HelpEntry, InterviewState, InterviewStatus, Llm, LlmTier, Member,
-  ParsedTurn, Phase, Profile, RateItem, Ratings, Stats, Turn, TurnResult,
-} from "./types";
+  ParsedTurn, Phase, Profile, RateItem, Ratings, Stats, Turn, TurnResult, Lang } from "./types";
 
 const M = P.MARK;
 
@@ -156,6 +155,8 @@ export class Interview {
   forcedRateAttempts: number;
   chips: string[] | null;
   startedAt: string;
+  /** The member's language; the interviewer speaks it and the feedback is written in it. */
+  lang: Lang = "en";
   /** Injected LLM; not serialised. */
   llm: Llm;
 
@@ -213,7 +214,7 @@ export class Interview {
 
   /** The `system` block for this interview (identical for every turn, so it caches). */
   system(): string {
-    return P.buildInterviewSystem(this.member, this.answers);
+    return P.buildInterviewSystem(this.member, this.answers, this.lang);
   }
 
   /**
@@ -274,13 +275,14 @@ export class Interview {
 
   /** Snapshot for persistence / resume. */
   toJSON(): InterviewState {
-    return { member: this.member, answers: this.answers, chips: this.chips || null, turns: this.turns, phase: this.phase, rateItems: this.rateItems, ratings: this.ratings, status: this.status, interviewerCount: this.interviewerCount, afterRateCount: this.afterRateCount, rateRetries: this.rateRetries, forcedRateAttempts: this.forcedRateAttempts, startedAt: this.startedAt };
+    return { member: this.member, answers: this.answers, chips: this.chips || null, turns: this.turns, phase: this.phase, rateItems: this.rateItems, ratings: this.ratings, status: this.status, interviewerCount: this.interviewerCount, afterRateCount: this.afterRateCount, rateRetries: this.rateRetries, forcedRateAttempts: this.forcedRateAttempts, startedAt: this.startedAt, ...(this.lang !== "en" ? { lang: this.lang } : {}) };
   }
   static fromJSON(o: Partial<InterviewState>, llm?: Llm): Interview {
     const iv = new Interview(o.member || { name: "", role: "" }, o.answers || null, llm);
     Object.assign(iv, o);
     if (typeof iv.rateRetries !== "number") iv.rateRetries = 0;
     if (typeof iv.forcedRateAttempts !== "number") iv.forcedRateAttempts = 0;
+    if (iv.lang !== "nl") iv.lang = "en";
     return iv;
   }
 }
@@ -353,8 +355,8 @@ export function meanRating(items: { id: string }[] | null | undefined, ratings: 
 }
 
 /** The profile request for a finished interview (questionnaire + transcript + ratings). */
-export function profileMessages(interview: Pick<Interview, "member" | "turns" | "rateItems" | "ratings" | "answers">): ChatMessage[] {
-  return [{ role: "user", content: P.buildProfilePrompt(interview.member, interview.turns, interview.rateItems, interview.ratings, interview.answers) }];
+export function profileMessages(interview: Pick<Interview, "member" | "turns" | "rateItems" | "ratings" | "answers"> & { lang?: Lang }): ChatMessage[] {
+  return [{ role: "user", content: P.buildProfilePrompt(interview.member, interview.turns, interview.rateItems, interview.ratings, interview.answers, interview.lang || "en") }];
 }
 
 /** Product signals come from the questionnaire's fixed options so they tally cleanly. */
@@ -374,7 +376,7 @@ export function signalsFromAnswers(a: Answers | null | undefined): { offerKeys: 
 export function newId(): string { return "p_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 
 /** Build the stored Profile from the interview + the model's JSON (see docs/architecture.md). */
-export function assembleProfile(interview: Pick<Interview, "member" | "turns" | "rateItems" | "ratings" | "answers" | "status">, modelOut: any, source?: Profile["source"]): Profile {
+export function assembleProfile(interview: Pick<Interview, "member" | "turns" | "rateItems" | "ratings" | "answers" | "status"> & { lang?: Lang }, modelOut: any, source?: Profile["source"]): Profile {
   const m = modelOut || {};
   const pr = m.practice || {};
   const level = clampInt(pr.level, 0, 4, 0);
@@ -427,6 +429,7 @@ export function assembleProfile(interview: Pick<Interview, "member" | "turns" | 
     quotes: Array.isArray(m.quotes) ? m.quotes.map(String).slice(0, 4) : [],
     transcript: interview.turns.slice(),
     endedEarly: interview.status === "ended_early",
+    ...(interview.lang === "nl" ? { lang: "nl" as const } : {}),
   };
 }
 

@@ -26,7 +26,7 @@ const plexMono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "AI at Work Diagnostic",
-  description: "A short interview about how AI shows up in your work, for members of Systeeminterventies.",
+  description: "A short interview about how AI shows up in your work, for members of Makersnetwerk.",
   robots: { index: false, follow: false },
 };
 
