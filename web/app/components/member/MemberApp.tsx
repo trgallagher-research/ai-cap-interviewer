@@ -253,6 +253,7 @@ export function MemberApp() {
   // ---------------------------------------------------------------------------
   function onLandingSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!config) return; // the access-code and email fields depend on it
     const nm = name.trim();
     const rl = role.trim();
     if (!nm) {
@@ -696,7 +697,7 @@ export function MemberApp() {
             {t.privacy(days)}
           </p>
           <div className="row">
-            <button className="btn primary" type="submit" id="btn-start" disabled={!ready}>
+            <button className="btn primary" type="submit" id="btn-start" disabled={!ready || !config}>
               {d ? t.startNew : t.start}
             </button>
           </div>
