@@ -1133,7 +1133,16 @@
     return el("section", { class: "og-delsec" }, [el("h3", null, "Remove"), wrap]);
   }
 
-  /** Email, whether the report was emailed, and the member's private report link. */
+  let currentMe = null;
+  /** When this profile's data is deleted: retention days after the interview (or the import, if later). */
+  function deletionDate(p) {
+    const days = currentMe && currentMe.retentionDays;
+    if (!days || isSample(p)) return null;
+    const t = Math.max(Date.parse(p.createdAt) || 0, Date.parse(p.importedAt || "") || 0);
+    return t ? new Date(t + days * 86400000) : null;
+  }
+
+  /** Email, whether the report was emailed, the member's private report link, and when it is all deleted. */
   function contactSection(p) {
     const em = p.member && p.member.email;
     const st = p.emailStatus && p.emailStatus.state;
@@ -1147,6 +1156,8 @@
       btn.addEventListener("click", () => copyText(url, btn));
       rows.push(el("p", null, [el("b", null, "Their report: "), btn, el("span", { class: "og-caption" }, " private; anyone with the link can read it")]));
     }
+    const del = deletionDate(p);
+    if (del) rows.push(el("p", { class: "og-caption", id: "og-delete-date" }, "Deleted automatically on " + del.toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" }) + ", with their email and report link."));
     return el("section", { class: "og-contact" }, [el("h3", null, "Contact")].concat(rows));
   }
 
@@ -1183,9 +1194,10 @@
     });
     const describe = (s) => {
       radios.forEach((r) => { r.checked = r.value === s.emailMode; });
-      status.textContent = s.emailSending
+      status.textContent = (s.emailSending
         ? "Email sending is on: members who give an address get their report by email."
-        : "Email sending is not set up yet, so reports are not emailed. Addresses are still collected when asked, and every member gets a private link on screen.";
+        : "Email sending is not set up yet, so reports are not emailed. Addresses are still collected when asked, and every member gets a private link on screen.")
+        + (s.retentionDays ? ` Results, email addresses and report links are deleted automatically ${s.retentionDays} days after each interview.` : "");
     };
     box.appendChild(form); box.appendChild(status);
     window.Store.getSettings().then((s) => { current = s.emailMode; describe(s); }).catch((e) => { status.textContent = "Could not load settings: " + e.message; });
@@ -1332,6 +1344,7 @@
     const stats = E().stats(profiles);
     let me = null;
     try { me = window.Store && window.Store.me ? await window.Store.me() : null; } catch (_) { me = null; }
+    currentMe = me;
     const rerender = (o) => render(container, o);
     currentRerender = rerender;
     const root = el("div", { class: "og-root", id: "og-root" });

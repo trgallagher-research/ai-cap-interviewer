@@ -20,6 +20,13 @@ export interface AppConfig {
   /** The organiser's setting: ask for an email (required/optional) or not at all. */
   emailMode?: "required" | "optional" | "none";
   emailSending?: boolean;
+  /** The organiser members can reach (empty when not configured). */
+  contactName?: string;
+  contactEmail?: string;
+  /** True when report-email replies go to the contact address. */
+  repliesToContact?: boolean;
+  /** Days before survey data is deleted. */
+  retentionDays?: number;
 }
 
 export interface InterviewStateResponse {

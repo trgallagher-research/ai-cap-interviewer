@@ -48,7 +48,7 @@ function client(url) {
 describe("organiser accounts, email setting, report links and costs", () => {
   let srv, c, owner, org;
   before(async () => {
-    srv = await startServer({ env: { ORGANISER_PASSCODE: null, ORGANISER_ACCOUNTS: ACCOUNTS, EMAIL_MOCK: "1" } });
+    srv = await startServer({ env: { ORGANISER_PASSCODE: null, ORGANISER_ACCOUNTS: ACCOUNTS, EMAIL_MOCK: "1", ORGANISER_CONTACT_NAME: "Suzanne", ORGANISER_CONTACT_EMAIL: "suzanne@example.nl", RETENTION_DAYS: "90" } });
     c = client(srv.url);
   });
   after(async () => { await srv?.stop(); });
@@ -60,8 +60,8 @@ describe("organiser accounts, email setting, report links and costs", () => {
     assert.equal(org.status, 204);
     assert.notEqual(owner.cookie, org.cookie);
     assert.equal((await c.login("not-a-passcode")).status, 401);
-    assert.deepEqual((await c.req("GET", "/api/organiser/me", undefined, owner.cookie)).json, { id: "tim", name: "Tim", role: "owner" });
-    assert.deepEqual((await c.req("GET", "/api/organiser/me", undefined, org.cookie)).json, { id: "suzanne", name: "Suzanne", role: "organiser" });
+    assert.deepEqual((await c.req("GET", "/api/organiser/me", undefined, owner.cookie)).json, { id: "tim", name: "Tim", role: "owner", retentionDays: 90 });
+    assert.deepEqual((await c.req("GET", "/api/organiser/me", undefined, org.cookie)).json, { id: "suzanne", name: "Suzanne", role: "organiser", retentionDays: 90 });
     assert.equal((await c.req("GET", "/api/organiser/me")).status, 401);
     // A forged cookie for another account id does not work.
     const forged = "aiwd_org=tim." + org.cookie.split(".").slice(1).join(".");
@@ -76,6 +76,11 @@ describe("organiser accounts, email setting, report links and costs", () => {
     assert.equal((await c.req("GET", "/api/organiser/audit", undefined, owner.cookie)).status, 200);
   });
 
+  test("public config names the contact, says replies go there, and states the retention period", async () => {
+    const cfg = (await c.req("GET", "/api/config")).json;
+    assert.deepEqual([cfg.contactName, cfg.contactEmail, cfg.repliesToContact, cfg.retentionDays], ["Suzanne", "suzanne@example.nl", true, 90]);
+  });
+
   test("email setting: defaults to none; the organiser can change it; it is enforced at start", async () => {
     assert.equal((await c.req("GET", "/api/config")).json.emailMode, "none");
     // Not collected: an email sent anyway is ignored.
@@ -85,7 +90,7 @@ describe("organiser accounts, email setting, report links and costs", () => {
     assert.equal((await c.req("PUT", "/api/organiser/settings", { emailMode: "bogus" }, org.cookie)).status, 400);
     const put = await c.req("PUT", "/api/organiser/settings", { emailMode: "required" }, org.cookie);
     assert.equal(put.status, 200);
-    assert.deepEqual(put.json, { emailMode: "required", emailSending: true });
+    assert.deepEqual(put.json, { emailMode: "required", emailSending: true, retentionDays: 90 });
     assert.equal((await c.req("GET", "/api/config")).json.emailMode, "required");
     const missing = await c.quickInterview("Noemail");
     assert.equal(missing.start.status, 400);
@@ -105,6 +110,7 @@ describe("organiser accounts, email setting, report links and costs", () => {
     assert.equal(page.status, 200);
     assert.ok(page.text.includes("Thanks Rosa"), "report page shows the feedback");
     assert.ok(page.text.includes("noindex"), "report page is not indexed");
+    assert.ok(page.text.includes("It will be deleted on"), "report page states when it is deleted");
     assert.ok(!/"level"|practice level/i.test(page.text), "report page shows no coding");
     assert.ok((await c.req("GET", "/r/r_" + "0".repeat(32))).text.includes("This report is not available"));
     const profiles = (await c.req("GET", "/api/organiser/profiles", undefined, org.cookie)).json.profiles;

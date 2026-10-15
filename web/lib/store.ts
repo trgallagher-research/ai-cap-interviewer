@@ -5,7 +5,12 @@
  * (local dev and tests only: lost on restart, not shared between serverless instances).
  *
  * Keys (all prefixed "aiwd:"):
- *   aiwd:iv:{id}            interview record (state + finish result), TTL 60 days
+ * Retention: everything that holds survey data expires RETENTION_DAYS (default 90) after the interview
+ * (profiles, report links, emails on interview records) or after it was written (product read,
+ * share-back, activity entries). Interview records expire after 60 days, or sooner if retention is
+ * shorter. Cost counters hold no personal data and are kept 400 days.
+ *
+ *   aiwd:iv:{id}            interview record (state + finish result, member email), TTL min(60 days, retention)
  *   aiwd:lock:{id}          per-interview lock, SET NX PX 90000
  *   aiwd:profile:{id}       stored Profile (no TTL)
  *   aiwd:profiles           sorted set of profile ids by createdAt (no TTL)
@@ -24,7 +29,23 @@ import { Redis } from "@upstash/redis";
 import type { GeneratedResult, InterviewState, MemberResult, Profile } from "./aiwd/types";
 
 const P = "aiwd:";
-export const INTERVIEW_TTL_SECONDS = 60 * 24 * 60 * 60;
+/** Days that survey data is kept (RETENTION_DAYS, default 90; at least 1). */
+export function retentionDays(): number {
+  const n = Number(process.env.RETENTION_DAYS);
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 90;
+}
+const DAY = 24 * 60 * 60;
+/** When a record dated `iso` must be gone. */
+export function deleteAfter(iso: string | undefined): Date {
+  const t = iso ? Date.parse(iso) : NaN;
+  return new Date((Number.isFinite(t) ? t : Date.now()) + retentionDays() * DAY * 1000);
+}
+/** Seconds left until deleteAfter(iso); at least one hour so a write never expires on the spot. */
+export function secondsLeft(iso: string | undefined): number {
+  return Math.max(3600, Math.round((deleteAfter(iso).getTime() - Date.now()) / 1000));
+}
+export function interviewTtlSeconds(): number { return Math.min(60 * DAY, retentionDays() * DAY); }
+export const INTERVIEW_TTL_SECONDS = 60 * DAY;
 export const LOCK_MS = 90_000;
 
 // ---------------------------------------------------------------------------
@@ -187,7 +208,7 @@ export async function getInterview(id: string): Promise<InterviewRecord | null> 
 
 export async function saveInterview(rec: InterviewRecord): Promise<void> {
   rec.updatedAt = new Date().toISOString();
-  await kv().set(P + "iv:" + rec.id, JSON.stringify(rec), { ex: INTERVIEW_TTL_SECONDS });
+  await kv().set(P + "iv:" + rec.id, JSON.stringify(rec), { ex: interviewTtlSeconds() });
 }
 
 /** Per-interview lock. Returns a token to release with, or null when busy. */
@@ -254,8 +275,14 @@ export async function allowStart(ip: string): Promise<boolean> {
 // ---------------------------------------------------------------------------
 // Profiles
 // ---------------------------------------------------------------------------
+/** The date a profile's retention runs from: the interview, or the import if that was later. */
+export function profileDate(p: Pick<Profile, "createdAt" | "importedAt">): string {
+  const c = Date.parse(p.createdAt), i = p.importedAt ? Date.parse(p.importedAt) : NaN;
+  return new Date(Math.max(Number.isFinite(c) ? c : 0, Number.isFinite(i) ? i : 0) || Date.now()).toISOString();
+}
+
 export async function saveProfile(p: Profile): Promise<void> {
-  await kv().set(P + "profile:" + p.id, JSON.stringify(p));
+  await kv().set(P + "profile:" + p.id, JSON.stringify(p), { ex: secondsLeft(profileDate(p)) });
   const t = Date.parse(p.createdAt);
   await kv().zadd(P + "profiles", Number.isFinite(t) ? t : Date.now(), p.id);
 }
@@ -269,7 +296,21 @@ export async function listProfiles(): Promise<Profile[]> {
   const ids = await kv().zrevAll(P + "profiles");
   if (!ids.length) return [];
   const vals = await kv().mget(ids.map((id) => P + "profile:" + id));
-  return vals.map((v) => parse<Profile>(v)).filter((p): p is Profile => !!p);
+  // Expired profiles leave their id in the index: tidy those up as we go.
+  for (let i = 0; i < ids.length; i++) if (vals[i] === null) await kv().zrem(P + "profiles", ids[i]);
+  const out: Profile[] = [];
+  for (const p of vals.map((v) => parse<Profile>(v))) {
+    if (!p) continue;
+    // Records written before expiry was set have no TTL: enforce the retention period here too.
+    if (expired(p)) { await deleteProfile(p.id); continue; }
+    out.push(p);
+  }
+  return out;
+}
+
+/** Past its retention period (seed samples never are; they are not stored). */
+export function expired(p: Pick<Profile, "createdAt" | "importedAt">): boolean {
+  return deleteAfter(profileDate(p)).getTime() <= Date.now();
 }
 
 export async function deleteProfile(id: string): Promise<boolean> {
@@ -289,7 +330,7 @@ export async function getGenerated(kind: GenerateKind): Promise<GeneratedResult 
 }
 
 export async function setGenerated(kind: GenerateKind, value: GeneratedResult): Promise<void> {
-  await kv().set(P + "gen:" + kind, JSON.stringify(value));
+  await kv().set(P + "gen:" + kind, JSON.stringify(value), { ex: retentionDays() * DAY });
 }
 
 /** Short lock for an expensive organiser generation (one at a time per kind). */
@@ -323,15 +364,18 @@ export async function saveSettings(s: Settings): Promise<void> {
 export function newReportToken(): string { return randomId("r_"); }
 export function isReportToken(v: unknown): v is string { return typeof v === "string" && /^r_[0-9a-f]{32}$/.test(v); }
 
-export async function saveReportToken(token: string, profileId: string): Promise<void> {
-  await kv().set(P + "report:" + token, profileId);
+/** The link expires with the profile (retention), and dies earlier if the profile is deleted. */
+export async function saveReportToken(token: string, profile: Pick<Profile, "id" | "createdAt" | "importedAt">): Promise<void> {
+  await kv().set(P + "report:" + token, profile.id, { ex: secondsLeft(profileDate(profile)) });
 }
 
 /** The profile behind a report link, or null (unknown token, or the profile was deleted). */
 export async function profileForReport(token: string): Promise<Profile | null> {
   if (!isReportToken(token)) return null;
   const id = await kv().get(P + "report:" + token);
-  return id ? getProfile(id) : null;
+  const p = id ? await getProfile(id) : null;
+  if (p && expired(p)) { await deleteProfile(p.id); return null; }
+  return p;
 }
 
 // ---------------------------------------------------------------------------
@@ -349,7 +393,15 @@ export async function audit(who: { id: string; name: string }, action: string, d
 
 export async function listAudit(limit = 50): Promise<AuditEntry[]> {
   const all = await kv().zrevAll(P + "audit");
-  return all.slice(0, limit).map((m) => parse<AuditEntry>(m.split("\u0000")[0])).filter((e): e is AuditEntry => !!e);
+  const cutoff = Date.now() - retentionDays() * DAY * 1000;
+  const out: AuditEntry[] = [];
+  for (const m of all) {
+    const e = parse<AuditEntry>(m.split("\u0000")[0]);
+    // Entries can name members ("deleted a result (Rosa)"): drop them after the retention period.
+    if (!e || Date.parse(e.at) < cutoff) { await kv().zrem(P + "audit", m); continue; }
+    if (out.length < limit) out.push(e);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------

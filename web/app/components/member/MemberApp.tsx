@@ -556,6 +556,9 @@ export function MemberApp() {
   // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
+  const who = config?.contactName || "The organiser";
+  const days = config?.retentionDays || 0;
+
   if (screen === "landing") {
     const d = draftCard;
     let where = "";
@@ -577,6 +580,15 @@ export function MemberApp() {
           Near the end you rate your confidence on a few tasks drawn from your own practice. You then get personal feedback you can act on. The
           organiser can read what you said, with your first name, and sees a map of the whole network built from everyone&apos;s interviews.
         </p>
+
+        {config?.contactEmail && (
+          <p className="small" id="contact-line">
+            Questions? Email {config.contactName || "the organiser"} at <a href={"mailto:" + config.contactEmail}>{config.contactEmail}</a>.
+            {config.emailMode && config.emailMode !== "none" && config.emailSending && config.repliesToContact
+              ? ` Your report email comes from the AI at Work Diagnostic (alignedstudies.org); if you reply, it goes to ${config.contactName || "the organiser"}.`
+              : ""}
+          </p>
+        )}
 
         {d && (
           <div className="card stack-sm" id="draft-card">
@@ -643,8 +655,9 @@ export function MemberApp() {
               />
               <span className="small" id="f-email-hint" style={{ fontWeight: 400 }}>
                 {config.emailSending
-                  ? "We use it only to send you your report. The organiser can see it, to follow up with you."
-                  : "So the organiser can follow up with you. The organiser can see it. Your report will also be on screen at the end, with a private link."}
+                  ? `We use your email only to send you your report. ${who} can see it, to follow up with you and the group.`
+                  : `${who} can see it, to follow up with you and the group. Your report will also be on screen at the end, with a private link.`}
+                {days ? ` Data from the survey will be deleted after ${days} days.` : ""}
               </span>
             </label>
           )}
@@ -673,7 +686,7 @@ export function MemberApp() {
             {landingError?.text}
           </p>
           <p className="small">
-            Your answers are saved for the organiser. Use a first name only and leave out client names. This is a pilot: treat it as a test, not a
+            Your answers are saved for the organiser{days ? ` and deleted after ${days} days` : ""}. Use a first name only and leave out client names. This is a pilot: treat it as a test, not a
             formal survey.
           </p>
           <div className="row">
@@ -876,7 +889,7 @@ export function MemberApp() {
             <h2>Keep your report</h2>
             <p className="small">
               {finish.emailState === "sent" ? "We have also emailed it to you. " : ""}
-              This private link opens your report on any device. Anyone with the link can read it, so keep it to yourself.
+              This private link opens your report on any device{days ? ` for ${days} days` : ""}. Anyone with the link can read it, so keep it to yourself.
             </p>
             <div className="row">
               <input className="input" id="report-url" readOnly value={reportUrl} onFocus={(e) => e.currentTarget.select()} aria-label="Private link to your report" />

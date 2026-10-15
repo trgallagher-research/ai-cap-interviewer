@@ -177,8 +177,8 @@ test("memory store: lock NX, rate limit, slots, profiles newest first", async ()
   assert.equal(await s.reserveInterviewSlot(), true);
   assert.equal(await s.reserveInterviewSlot(), true);
   assert.equal(await s.reserveInterviewSlot(), false);
-  await s.saveProfile({ ...SEED[0], id: "old", createdAt: "2026-01-01T00:00:00Z" });
-  await s.saveProfile({ ...SEED[1], id: "new", createdAt: "2026-02-01T00:00:00Z" });
+  await s.saveProfile({ ...SEED[0], id: "old", createdAt: new Date(Date.now() - 2 * 86400000).toISOString() });
+  await s.saveProfile({ ...SEED[1], id: "new", createdAt: new Date(Date.now() - 86400000).toISOString() });
   assert.deepEqual((await s.listProfiles()).map((p) => p.id), ["new", "old"]);
   assert.equal(await s.deleteProfile("old"), true);
   assert.deepEqual((await s.listProfiles()).map((p) => p.id), ["new"]);
@@ -210,7 +210,7 @@ test("memory store: settings, report links, activity log, cost counters", async 
   await s.saveProfile(p);
   const tok = s.newReportToken();
   assert.equal(s.isReportToken(tok), true);
-  await s.saveReportToken(tok, p.id);
+  await s.saveReportToken(tok, p);
   assert.equal((await s.profileForReport(tok))?.id, p.id);
   assert.equal(await s.profileForReport("r_" + "f".repeat(32)), null);
   assert.equal(await s.profileForReport("../etc"), null);
@@ -252,4 +252,48 @@ test("getLlm({kind, interviewId}) records each call's cost, including refusals",
   const before = JSON.stringify(await s.costTotals());
   await getLlm().chat("The person you are talking to is Anna, who described", [{ role: "user", content: "x" }], { tier: "interview" });
   assert.equal(JSON.stringify(await s.costTotals()), before);
+});
+
+test("retention: deletion dates, TTLs, and the report email states the period and the reply-to", async () => {
+  const s = await import("../../lib/store");
+  delete process.env.RETENTION_DAYS;
+  assert.equal(s.retentionDays(), 90);
+  process.env.RETENTION_DAYS = "30";
+  assert.equal(s.retentionDays(), 30);
+  assert.equal(s.interviewTtlSeconds(), 30 * 86400, "interview records never outlive the retention period");
+  process.env.RETENTION_DAYS = "0";
+  assert.equal(s.retentionDays(), 90, "invalid values fall back to 90");
+  delete process.env.RETENTION_DAYS;
+  assert.equal(s.interviewTtlSeconds(), 60 * 86400);
+  const created = "2026-01-01T00:00:00.000Z";
+  assert.equal(s.deleteAfter(created).toISOString(), "2026-04-01T00:00:00.000Z");
+  assert.equal(s.secondsLeft("2000-01-01T00:00:00Z"), 3600, "an old record gets the one-hour minimum, never zero");
+  const fresh = s.secondsLeft(new Date().toISOString());
+  assert.ok(fresh > 89 * 86400 && fresh <= 90 * 86400);
+  // Retention runs from the import when that is later than the interview.
+  assert.equal(s.profileDate({ createdAt: created, importedAt: "2026-02-01T00:00:00.000Z" }), "2026-02-01T00:00:00.000Z");
+  assert.equal(s.profileDate({ createdAt: created }), created);
+  // A record older than the retention period is deleted when listed or opened, even without a TTL.
+  const old = { ...(await import("../../lib/aiwd/seed")).SEED[1], id: "p_old_test", createdAt: "2025-01-01T00:00:00.000Z", source: "live" } as any;
+  await s.saveProfile(old);
+  const tok = s.newReportToken();
+  await s.saveReportToken(tok, old);
+  assert.equal(s.expired(old), true);
+  assert.equal(await s.profileForReport(tok), null);
+  assert.equal(await s.getProfile("p_old_test"), null, "opening the link deleted it");
+  await s.saveProfile(old);
+  assert.ok(!(await s.listProfiles()).some((p) => p.id === "p_old_test"));
+  assert.equal(await s.getProfile("p_old_test"), null, "listing deleted it");
+  const em = await import("../../lib/email");
+  process.env.EMAIL_MOCK = "1";
+  process.env.ORGANISER_CONTACT_NAME = "Suzanne";
+  process.env.ORGANISER_CONTACT_EMAIL = "suzanne@example.nl";
+  const fb = { headline: "H", summary: "S", strengths: [], nextSteps: [], closing: "" };
+  assert.equal(await em.sendReport("m@example.nl", "M", fb, "https://x/r/r_1", 90), "sent");
+  const last = em.mockOutbox.at(-1)!;
+  assert.equal(last.replyTo, "suzanne@example.nl");
+  assert.ok(last.text.includes("stays available for 90 days") && last.text.includes("reply to this email to reach Suzanne"));
+  process.env.EMAIL_REPLY_TO = "other@example.nl";
+  assert.equal(em.replyTo(), "other@example.nl");
+  for (const k of ["EMAIL_MOCK", "ORGANISER_CONTACT_NAME", "ORGANISER_CONTACT_EMAIL", "EMAIL_REPLY_TO"]) delete process.env[k];
 });

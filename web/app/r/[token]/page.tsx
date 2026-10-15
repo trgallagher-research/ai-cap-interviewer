@@ -4,7 +4,7 @@
 import type { Metadata } from "next";
 import { FeedbackView } from "@/app/components/member/FeedbackView";
 import { memberResult } from "@/lib/member";
-import { profileForReport } from "@/lib/store";
+import { deleteAfter, profileDate, profileForReport } from "@/lib/store";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Your feedback · AI at Work Diagnostic", robots: { index: false, follow: false }, referrer: "no-referrer" };
@@ -27,7 +27,10 @@ export default async function ReportPage({ params }: { params: Promise<{ token: 
     <main id="view">
       <div className="stack feedback" id="report">
         <FeedbackView feedback={r.feedback} ratings={r.ratings} />
-        <p className="small">This is your private report. Anyone with this link can read it, so keep it to yourself.</p>
+        <p className="small" id="report-note">
+          This is your private report. Anyone with this link can read it, so keep it to yourself. It will be deleted on{" "}
+          {deleteAfter(profileDate(p)).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}.
+        </p>
       </div>
     </main>
   );

@@ -4,7 +4,7 @@ import { errorResponse, isInterviewId, jsonError, noStore, readJson } from "@/li
 import { getLlm } from "@/lib/llm";
 import { memberResult } from "@/lib/member";
 import { sendReport } from "@/lib/email";
-import { acquireLock, getInterview, getSettings, newReportToken, releaseLock, saveInterview, saveProfile, saveReportToken, withinLimit } from "@/lib/store";
+import { acquireLock, getInterview, getSettings, newReportToken, retentionDays, releaseLock, saveInterview, saveProfile, saveReportToken, withinLimit } from "@/lib/store";
 
 /** Absolute base for links in emails: PUBLIC_BASE_URL, else the request's own origin. */
 function baseUrl(req: NextRequest): string {
@@ -49,9 +49,9 @@ export async function POST(req: NextRequest) {
       profile.reportToken = newReportToken();
       if (rec.email) profile.member.email = rec.email;
       await saveProfile(profile);
-      await saveReportToken(profile.reportToken, profile.id);
+      await saveReportToken(profile.reportToken, profile);
       if (rec.email && (await getSettings()).emailMode !== "none") {
-        const state = await sendReport(rec.email, profile.member.name, profile.feedback, baseUrl(req) + "/r/" + profile.reportToken);
+        const state = await sendReport(rec.email, profile.member.name, profile.feedback, baseUrl(req) + "/r/" + profile.reportToken, retentionDays());
         profile.emailStatus = { state, at: new Date().toISOString() };
         await saveProfile(profile);
       }

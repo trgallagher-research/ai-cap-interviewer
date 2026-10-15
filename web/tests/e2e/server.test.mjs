@@ -89,7 +89,7 @@ describe("default server (mock LLM, memory store, passcode test)", () => {
 
   test("config", async () => {
     const r = await c.getJson("/api/config");
-    assert.deepEqual(r.body, { voice: false, memberCodeRequired: false, storage: "memory", emailMode: "none", emailSending: false });
+    assert.deepEqual(r.body, { voice: false, memberCodeRequired: false, storage: "memory", emailMode: "none", emailSending: false, contactName: "", contactEmail: "", repliesToContact: false, retentionDays: 90 });
   });
 
   test("full flow: start → turns (SSE) → ratings → close → finish; member never sees coding", async () => {

@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { requireOrganiser } from "@/lib/auth";
 import { emailConfigured } from "@/lib/email";
 import { errorResponse, jsonError, noStore, readJson } from "@/lib/http";
-import { audit, getSettings, saveSettings, type EmailMode } from "@/lib/store";
+import { audit, getSettings, retentionDays, saveSettings, type EmailMode } from "@/lib/store";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const auth = await requireOrganiser(req);
   if (auth.denied) return auth.denied;
   try {
-    return noStore({ ...(await getSettings()), emailSending: emailConfigured() });
+    return noStore({ ...(await getSettings()), emailSending: emailConfigured(), retentionDays: retentionDays() });
   } catch (err) {
     return errorResponse(err);
   }
@@ -31,7 +31,7 @@ export async function PUT(req: NextRequest) {
     const prev = await getSettings();
     await saveSettings({ ...prev, emailMode: mode });
     if (prev.emailMode !== mode) await audit(auth.organiser, "changed the email setting", `${prev.emailMode} → ${mode}`);
-    return noStore({ ...(await getSettings()), emailSending: emailConfigured() });
+    return noStore({ ...(await getSettings()), emailSending: emailConfigured(), retentionDays: retentionDays() });
   } catch (err) {
     return errorResponse(err);
   }

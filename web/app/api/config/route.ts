@@ -1,6 +1,6 @@
 import { transcriptionEnabled } from "@/lib/groq";
-import { emailConfigured } from "@/lib/email";
-import { getSettings, storageKind } from "@/lib/store";
+import { contact, emailConfigured, replyTo } from "@/lib/email";
+import { getSettings, retentionDays, storageKind } from "@/lib/store";
 import { noStore } from "@/lib/http";
 
 export const runtime = "nodejs";
@@ -16,5 +16,9 @@ export async function GET() {
     storage: storageKind(),
     emailMode,
     emailSending: emailConfigured(),
+    contactName: contact().name,
+    contactEmail: contact().email,
+    repliesToContact: !!replyTo() && replyTo() === contact().email,
+    retentionDays: retentionDays(),
   });
 }

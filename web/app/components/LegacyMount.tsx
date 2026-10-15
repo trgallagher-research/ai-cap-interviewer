@@ -132,7 +132,7 @@ const Store = {
     );
   },
   async me() {
-    return json<{ id: string; name: string; role: "owner" | "organiser" }>(await fetch("/api/organiser/me", { cache: "no-store" }));
+    return json<{ id: string; name: string; role: "owner" | "organiser"; retentionDays: number }>(await fetch("/api/organiser/me", { cache: "no-store" }));
   },
   async getSettings() {
     return json<{ emailMode: string; emailSending: boolean }>(await fetch("/api/organiser/settings", { cache: "no-store" }));
