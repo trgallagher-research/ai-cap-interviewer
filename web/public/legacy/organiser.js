@@ -233,6 +233,8 @@
 .og-list h3 { margin-bottom: .2rem; }
 .og-list .sub { color: var(--muted); font-size: .8rem; margin-bottom: .5rem; }
 .og-list ul { margin: 0; padding-left: 1.1rem; display: grid; gap: .3rem; font-size: .9rem; }
+.og-list.workshop { margin-top: 1rem; }
+.og-list.workshop h4 { margin: .8rem 0 .3rem; font-size: .9rem; }
 .og-list li small { color: var(--muted); }
 .og-list ul.tally { margin-bottom: .2rem; }
 .og-list ul.tally li { color: var(--fg); }
@@ -841,7 +843,36 @@
       pay(),
     ]);
     const product = productCard(profiles, stats);
-    return sectionEl("signals", "Wants, offers and what they would pay for", "The raw material for deciding whether there is something to offer, and to whom.", el("div", null, [cols, product]));
+    return sectionEl("signals", "Wants, offers and what they would pay for", "The raw material for deciding whether there is something to offer, and to whom.", el("div", null, [cols, workshopBox(profiles, nameOf), product]));
+  }
+
+  /** Interest in the one-hour practical workshop (Suzanne and Aad), and what members want to learn first. */
+  function workshopBox(profiles, nameOf) {
+    const ans = (p) => (p.questionnaire && typeof p.questionnaire === "object") ? p.questionnaire : {};
+    const groups = { yes: [], maybe: [], no: [] };
+    const wishes = [];
+    let asked = 0;
+    profiles.forEach((p) => {
+      const a = ans(p);
+      if (a.workshop && groups[a.workshop]) { groups[a.workshop].push(nameOf(p)); asked++; }
+      if (typeof a.workshopFirst === "string" && a.workshopFirst.trim()) wishes.push({ text: a.workshopFirst.trim(), who: nameOf(p), interest: a.workshop || "" });
+    });
+    const box = el("div", { class: "og-list workshop" }, [
+      el("h3", null, "Workshop interest"),
+      el("div", { class: "sub" }, "Would they join a practical one-hour workshop on getting started with AI and Claude, or building their own tools? And the first thing they want to learn, in their own words."),
+    ]);
+    if (!asked && !wishes.length) { box.appendChild(el("p", { class: "empty" }, "No answers yet. Members who took the diagnostic before this question was added were not asked.")); return box; }
+    const label = { yes: "Yes, would join", maybe: "Maybe", no: "No" };
+    box.appendChild(el("ul", { class: "full" }, ["yes", "maybe", "no"].map((k) =>
+      el("li", null, [el("strong", null, label[k] + ": " + groups[k].length), groups[k].length ? " " : "", groups[k].length ? el("small", null, "\u00B7 " + groups[k].join(", ")) : null]))));
+    if (wishes.length) {
+      box.appendChild(el("h4", null, "First thing they want to learn"));
+      const order = { yes: 0, maybe: 1, no: 2, "": 3 };
+      wishes.sort((a, b) => (order[a.interest] ?? 3) - (order[b.interest] ?? 3));
+      box.appendChild(el("ul", { class: "full" }, wishes.map((w) => el("li", null, ["\u201C" + w.text + "\u201D ", el("small", null, "\u00B7 " + w.who + (w.interest ? " (" + (label[w.interest] || w.interest).toLowerCase() + ")" : ""))]))));
+    }
+    box.appendChild(el("p", { class: "og-caption" }, (asked) + " of " + profiles.length + " members answered the workshop question."));
+    return box;
   }
 
   /** "Would pay for" from the fixed quick-question options: one bar per option, split by the pay answer. */
@@ -1277,6 +1308,8 @@
     add("Worth their time", list("offer", a.offerOther) || "nothing ticked");
     if (!skipped("pay")) add("Would pay", a.pay ? optLabel("pay", a.pay) : "not answered");
     if (!skipped("canShow")) add("Could show a colleague", a.canShow ? optLabel("canShow", a.canShow) : "not answered");
+    if (a.workshop) add("Workshop interest", optLabel("workshop", a.workshop));
+    if (a.workshopFirst) add("First thing to learn", "\u201C" + a.workshopFirst + "\u201D");
     const Q = P().QUESTIONNAIRE;
     const pick = (block, keys) => Object.keys(Q).filter((id) => Q[id].block === block && !skipped(id) && keys.includes(a[id])).map((id) => Q[id].label.replace(/ \(e\.g\..*?\)/, "").replace(/\.$/, ""));
     const agreed = pick("views", ["a", "sa"]);

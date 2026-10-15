@@ -42,6 +42,9 @@ const en = {
   accessCodeHint: "It is in the invitation from the organiser.",
   privacy: (d: number) =>
     `Your answers are saved for the organiser${d ? ` and deleted after ${d} days` : ""}. Use a first name only and leave out client names. This is a pilot: treat it as a test, not a formal survey.`,
+  privacyMore: "How your answers are handled",
+  privacyBody: (d: number, who: string) =>
+    `A few services make this site work and process your answers along the way: Anthropic (the AI that holds the conversation and writes your report), Vercel and Upstash (hosting and storage), Resend (the email with your report) and Groq (only if you speak your answers). Anthropic and Groq do not use what comes in through their API to train their models. Only the organisers of ${NETWORK} can see your answers; anything shared with the network is anonymised and grouped.${d ? ` Everything is deleted after ${d} days.` : ""} Would you like your data removed sooner, or do you have a question? Let ${who} know.`,
   startNew: "Start a new interview",
   start: "Start",
   errName: "Please give a first name.",
@@ -171,6 +174,9 @@ const nl: Strings = {
   accessCodeHint: "Die staat in de uitnodiging van de organisator.",
   privacy: (d: number) =>
     `Je antwoorden worden bewaard voor de organisator${d ? ` en na ${d} dagen verwijderd` : ""}. Gebruik alleen een voornaam en laat namen van klanten weg. Dit is een pilot: zie het als een test, niet als een officieel onderzoek.`,
+  privacyMore: "Hoe we met je antwoorden omgaan",
+  privacyBody: (d: number, who: string) =>
+    `Een paar diensten laten deze site werken en verwerken daarbij je antwoorden: Anthropic (de AI die het gesprek voert en je rapport schrijft), Vercel en Upstash (hosting en opslag), Resend (de e-mail met je rapport) en Groq (alleen als je je antwoorden inspreekt). Anthropic en Groq gebruiken wat via hun API binnenkomt niet om hun modellen te trainen. Alleen de organisatoren van ${NETWORK} kunnen je antwoorden inzien; wat we met het netwerk delen, is geanonimiseerd en samengevoegd.${d ? ` Alles wordt na ${d} dagen verwijderd.` : ""} Wil je dat je gegevens eerder worden gewist, of heb je een vraag? Laat het ${who} weten.`,
   startNew: "Begin een nieuw gesprek",
   start: "Beginnen",
   errName: "Vul je voornaam in.",

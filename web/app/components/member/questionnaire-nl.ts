@@ -139,6 +139,11 @@ export const QUESTIONS_NL: Record<string, QNl> = {
   supAsked: { label: "Ik heb de afgelopen zes maanden een expert of deskundige collega om hulp gevraagd bij AI.", sub: "Gebruik van die hulp", options: YESNO },
   supTraining: { label: "Ik heb meegedaan aan een AI-training of -workshop.", options: YESNO },
   supSelfTaught: { label: "Ik leer vooral door zelf dingen uit te proberen.", options: YESNO },
+  workshop: {
+    label: "Suzanne en Aad kunnen een korte, praktische workshop geven (ongeveer een uur) om je op weg te helpen met AI en Claude, of met het bouwen van je eigen tools. Zou je daar interesse in hebben?",
+    options: { yes: "Ja, daar doe ik graag aan mee", maybe: "Misschien, afhankelijk van de datum en het onderwerp", no: "Nee, dank je" },
+  },
+  workshopFirst: { label: "Wat is het eerste dat je zou willen leren? (niet verplicht)" },
   whyNot: {
     label: "Je hebt de laatste tijd niemand om hulp gevraagd bij AI. Waarom niet? Vink aan wat van toepassing is.",
     options: {

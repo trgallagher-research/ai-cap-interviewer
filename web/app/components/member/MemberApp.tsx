@@ -696,6 +696,10 @@ export function MemberApp() {
           <p className="small">
             {t.privacy(days)}
           </p>
+          <details className="small" id="privacy-more">
+            <summary>{t.privacyMore}</summary>
+            <p>{t.privacyBody(days, config?.contactName || (lang === "nl" ? "de organisator" : "the organiser"))}</p>
+          </details>
           <div className="row">
             <button className="btn primary" type="submit" id="btn-start" disabled={!ready || !config}>
               {d ? t.startNew : t.start}

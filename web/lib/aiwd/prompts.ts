@@ -192,6 +192,20 @@ export const KICKOFF = "[The interview begins now.]";
         { key: "unsure", label: "Don't know yet" },
       ],
     },
+    // Suzanne's request (2026-10-15): interest in a one-hour practical workshop she and Aad could give.
+    workshop: {
+      id: "workshop", type: "single",
+      label: "Suzanne and Aad could give a short, practical workshop (about an hour) to get you started with AI and Claude, or with building your own tools. Would you be interested?",
+      options: [
+        { key: "yes",   label: "Yes, I would like to join" },
+        { key: "maybe", label: "Maybe, depending on the date and the topic" },
+        { key: "no",    label: "No, thank you" },
+      ],
+    },
+    workshopFirst: {
+      id: "workshopFirst", type: "text", max: 300, skipIf: { workshop: ["no"] }, skipIfEmpty: ["workshop"], options: [],
+      label: "What is the first thing you would want to learn? (optional)",
+    },
     canShow: {
       id: "canShow", type: "single", skipIf: { frequency: ["never", "tried"] },
       label: "Is there something you do with AI that you could show a colleague?",
@@ -213,7 +227,7 @@ export const KICKOFF = "[The interview begins now.]";
     { id: "skills", title: "What you actually do", intro: "Concrete things people do with AI, from basic to advanced. Answer for what you do now, not what you could do. It is fine to answer no to most of them.",
       qids: ["skillFollowUp", "skillCheck", "skillOwnMaterial", "skillPrompt", "skillAnonymise", "skillReusable", "skillAgents", "canShow", "scenarioCheck", "scenarioData"] },
     { id: "support", title: "Help and support", intro: "Where you could turn with questions about AI, whether you do, and what would be worth your time.",
-      qids: ["supInOrg", "supOutside", "supFormal", "supOnline", "supAsked", "supTraining", "supSelfTaught", "whyNot", "offer", "pay"] },
+      qids: ["supInOrg", "supOutside", "supFormal", "supOnline", "supAsked", "supTraining", "supSelfTaught", "whyNot", "offer", "pay", "workshop", "workshopFirst"] },
   ];
   export const QUESTION_ORDER: string[] = PAGES.flatMap((pg) => pg.qids);
 
@@ -241,6 +255,9 @@ export const KICKOFF = "[The interview begins now.]";
     return o ? o.label : key;
   }
 
+  /** Optional single-choice questions added for the organiser (not for the interviewer): no line when blank. */
+  const OMIT_IF_BLANK = new Set(["workshop"]);
+
   /** Plain-text summary of the questionnaire for the interviewer and profile prompts. */
   export function formatQuestionnaire(a: Answers | null | undefined): string {
     if (!a) return "(no questionnaire answers)";
@@ -252,7 +269,7 @@ export const KICKOFF = "[The interview begins now.]";
       const v = rec[qid];
       let txt: string;
       if (q.type === "text") { if (v) lines.push(`- ${q.label} "${v}"`); continue; }
-      if (q.block && !v) continue; // unanswered statements are left out
+      if ((q.block || OMIT_IF_BLANK.has(qid)) && !v) continue; // unanswered statements and optional extras are left out
       if (Array.isArray(v)) txt = v.length ? v.map((k) => optionLabel(qid, String(k))).join("; ") : "(none ticked)";
       else txt = v ? optionLabel(qid, String(v)) : "(not answered)";
       const other = rec[qid + "Other"];
@@ -687,6 +704,8 @@ ${transcriptText(turns)}`;
       offers: p.offers,
       wouldPayFor: p.productSignals && p.productSignals.wouldPayFor,
       pay: p.productSignals && p.productSignals.pay,
+      workshopInterest: (p.questionnaire as Record<string, unknown> | null | undefined)?.workshop || "",
+      workshopFirstWish: (p.questionnaire as Record<string, unknown> | null | undefined)?.workshopFirst || "",
       quotes: p.quotes,
       ...(p.selfCheck ? {
         skillIndex: p.selfCheck.skillIndex,
